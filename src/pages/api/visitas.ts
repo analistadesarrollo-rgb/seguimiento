@@ -73,7 +73,7 @@ export const GET: APIRoute = async ({ url }) => {
           s.nombres AS punto_venta,
           s.documento,
           COALESCE(p.NOMBRE, s.sucursal) AS sucursal,
-          COALESCE(b.nombre, s.supervisor) AS supervisor,
+          COALESCE(b.nombre, b2.nombre, s.supervisor) AS supervisor,
           DATE_FORMAT(s.fechavisita, '%Y-%m-%d') AS fecha,
           TIME_FORMAT(s.horavisita, '%H:%i:%s') AS hora,
           s.latitud,
@@ -82,6 +82,7 @@ export const GET: APIRoute = async ({ url }) => {
         FROM ${tabla} s
         LEFT JOIN GAMBLE.INFORMACION_PUNTOSVENTA p ON s.sucursal = p.codigo
         LEFT JOIN bdpersona.tbusuario b ON s.supervisor = b.login
+        LEFT JOIN bdpersona.tbusuario b2 ON CONCAT('CP', s.supervisor) = b2.login
         WHERE s.latitud IS NOT NULL 
           AND s.latitud != '' 
           AND s.longitud IS NOT NULL 
