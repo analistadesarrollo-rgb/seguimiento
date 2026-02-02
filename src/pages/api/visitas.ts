@@ -14,14 +14,56 @@ interface Visita {
     empresa: string;
 }
 
+// Profile-based access rules
+const PROFILE_RULES: Record<string, { tables: string[], perfilFilter?: string, excludePerfilFilter?: string }> = {
+    // Servired commercial - sees Servired visits where supervisor is NOT AUDITORIA-OPERATIVA
+    'COMERCIAL-SERVIRED': { tables: ['registrovisitasservired'], excludePerfilFilter: 'AUDITORIA-OPERATIVA' },
+    'APLICACIONES': { tables: ['registrovisitasservired'], excludePerfilFilter: 'AUDITORIA-OPERATIVA' },
+
+    // Servired audit - sees only Servired visits where supervisor IS AUDITORIA-OPERATIVA
+    'AUDITORIA-SERVIRED': { tables: ['registrovisitasservired'], perfilFilter: 'AUDITORIA-OPERATIVA' },
+
+    // Multired commercial - sees Multired visits where supervisor is NOT AUDITORIA-OPERATIVA
+    'COMERCIAL-MULTIRED': { tables: ['registrovisitas'], excludePerfilFilter: 'AUDITORIA-OPERATIVA' },
+
+    // Multired audit - sees only Multired visits where supervisor IS AUDITORIA-OPERATIVA
+    'AUDITORIA-MULTIRED': { tables: ['registrovisitas'], perfilFilter: 'AUDITORIA-OPERATIVA' },
+
+    // Operative audit - sees both tables where supervisor IS AUDITORIA-OPERATIVA
+    'AUDITORIA-OPERATIVA': { tables: ['registrovisitas', 'registrovisitasservired'], perfilFilter: 'AUDITORIA-OPERATIVA' },
+
+    // Admin profiles - see everything
+    'ADMINISTRADOR': { tables: ['registrovisitas', 'registrovisitasservired'] },
+    'ADMIN': { tables: ['registrovisitas', 'registrovisitasservired'] },
+    'GERENCIA': { tables: ['registrovisitas', 'registrovisitasservired'] },
+    'TECNOLOGIA': { tables: ['registrovisitas', 'registrovisitasservired'] },
+
+    // Administration profiles
+    'ADMINISTRACION_MULTIRED': { tables: ['registrovisitas'] },
+    'ADMINISTRACION_SERVIRED': { tables: ['registrovisitasservired'] },
+    'ADMINISTRACION': { tables: ['registrovisitas', 'registrovisitasservired'] },
+
+    // Coordinators - see both
+    'COORDINADOR': { tables: ['registrovisitas', 'registrovisitasservired'] },
+    'COORDINADOR COMERCIAL': { tables: ['registrovisitas', 'registrovisitasservired'] },
+
+    // Supervisors - see their own visits (by login)
+    'SUPERVISOR': { tables: ['registrovisitas', 'registrovisitasservired'] },
+};
+
 export const GET: APIRoute = async ({ url }) => {
     try {
         const empresa = url.searchParams.get('empresa') || 'ambas';
         const fecha_inicio = url.searchParams.get('fecha_inicio');
         const fecha_fin = url.searchParams.get('fecha_fin');
         const supervisor = url.searchParams.get('supervisor');
+        const perfil = url.searchParams.get('perfil')?.toUpperCase() || '';
+        const userLogin = url.searchParams.get('user_login') || '';
 
         let visitas: Visita[] = [];
+
+        // Get profile rules (default to both tables if profile not defined)
+        const rules = PROFILE_RULES[perfil] || { tables: ['registrovisitas', 'registrovisitasservired'] };
 
         // Build query function
         const buildQuery = (tabla: string, empresaNombre: string) => {
@@ -30,7 +72,7 @@ export const GET: APIRoute = async ({ url }) => {
           s.ip,
           s.nombres AS punto_venta,
           s.documento,
-          p.NOMBRE AS sucursal,
+          COALESCE(p.NOMBRE, s.sucursal) AS sucursal,
           COALESCE(b.nombre, s.supervisor) AS supervisor,
           DATE_FORMAT(s.fechavisita, '%Y-%m-%d') AS fecha,
           TIME_FORMAT(s.horavisita, '%H:%i:%s') AS hora,
@@ -47,6 +89,23 @@ export const GET: APIRoute = async ({ url }) => {
       `;
 
             const params: any[] = [];
+
+            // Apply profile-based filters
+            if (rules.perfilFilter) {
+                sql += ' AND b.perfil = ?';
+                params.push(rules.perfilFilter);
+            }
+
+            if (rules.excludePerfilFilter) {
+                sql += ' AND (b.perfil IS NULL OR b.perfil != ?)';
+                params.push(rules.excludePerfilFilter);
+            }
+
+            // Supervisor profile: only see own visits
+            if (perfil === 'SUPERVISOR' && userLogin) {
+                sql += ' AND s.supervisor = ?';
+                params.push(userLogin);
+            }
 
             if (fecha_inicio) {
                 sql += ' AND s.fechavisita >= ?';
@@ -67,15 +126,20 @@ export const GET: APIRoute = async ({ url }) => {
             return { sql, params };
         };
 
-        // Query based on empresa filter
-        if (empresa === 'multired' || empresa === 'ambas') {
-            const { sql, params } = buildQuery('registrovisitas', 'Multired');
-            const results = await query<Visita>(sql, params);
-            visitas = [...visitas, ...results];
+        // Determine which tables to query based on profile and empresa filter
+        const tablesToQuery: { tabla: string; nombre: string }[] = [];
+
+        if (rules.tables.includes('registrovisitas') && (empresa === 'multired' || empresa === 'ambas')) {
+            tablesToQuery.push({ tabla: 'registrovisitas', nombre: 'Multired' });
         }
 
-        if (empresa === 'servired' || empresa === 'ambas') {
-            const { sql, params } = buildQuery('registrovisitasservired', 'Servired');
+        if (rules.tables.includes('registrovisitasservired') && (empresa === 'servired' || empresa === 'ambas')) {
+            tablesToQuery.push({ tabla: 'registrovisitasservired', nombre: 'Servired' });
+        }
+
+        // Execute queries
+        for (const { tabla, nombre } of tablesToQuery) {
+            const { sql, params } = buildQuery(tabla, nombre);
             const results = await query<Visita>(sql, params);
             visitas = [...visitas, ...results];
         }

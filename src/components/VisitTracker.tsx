@@ -30,7 +30,12 @@ interface Filters {
     supervisor: string;
 }
 
-export default function VisitTracker() {
+interface Props {
+    userPerfil: string;
+    userLogin: string;
+}
+
+export default function VisitTracker({ userPerfil, userLogin }: Props) {
     const [visitas, setVisitas] = useState<Visita[]>([]);
     const [supervisores, setSupervisores] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
@@ -66,6 +71,8 @@ export default function VisitTracker() {
         try {
             const params = new URLSearchParams();
             params.append('empresa', filters.empresa);
+            params.append('perfil', userPerfil);  // Pass user profile for filtering
+            params.append('user_login', userLogin);  // Pass user login
             if (filters.fecha_inicio) params.append('fecha_inicio', filters.fecha_inicio);
             if (filters.fecha_fin) params.append('fecha_fin', filters.fecha_fin);
             if (filters.supervisor) params.append('supervisor', filters.supervisor);
