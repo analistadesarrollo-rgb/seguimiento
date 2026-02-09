@@ -315,48 +315,88 @@ function VisitMap({ visitas }: { visitas: Visita[] }) {
 
                 // Custom icons
                 const multiredIcon = L.divIcon({
-                    html: `<div style="background: linear-gradient(135deg, #ef4444, #dc2626); width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3);"></div>`,
+                    html: `<div style="background: linear-gradient(135deg, #ef4444, #dc2626); width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: bold;"></div>`,
                     className: 'custom-marker',
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 12]
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
                 });
 
                 const serviredIcon = L.divIcon({
-                    html: `<div style="background: linear-gradient(135deg, #22c55e, #16a34a); width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3);"></div>`,
+                    html: `<div style="background: linear-gradient(135deg, #22c55e, #16a34a); width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: bold;"></div>`,
                     className: 'custom-marker',
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 12]
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
                 });
 
-                // Add markers
-                const bounds: [number, number][] = [];
-
+                // Group visits by punto_venta NAME ONLY (ignore coordinate variations)
+                const puntoVentaMap = new Map<string, Visita[]>();
                 visitas.forEach((visita) => {
-                    const lat = parseFloat(visita.latitud);
-                    const lng = parseFloat(visita.longitud);
+                    const key = visita.punto_venta.trim().toUpperCase(); // Group by name only
+                    if (!puntoVentaMap.has(key)) {
+                        puntoVentaMap.set(key, []);
+                    }
+                    puntoVentaMap.get(key)!.push(visita);
+                });
 
-                    if (isNaN(lat) || isNaN(lng)) return;
+                console.log('Total puntos de venta únicos:', puntoVentaMap.size);
+                console.log('Puntos:', Array.from(puntoVentaMap.keys()));
 
+                // Add markers for each unique punto_venta
+                const bounds: [number, number][] = [];
+                let skippedCount = 0;
+
+                puntoVentaMap.forEach((visitasEnPunto, key) => {
+                    // Find the first visit with valid coordinates
+                    const visitaConCoords = visitasEnPunto.find(v => {
+                        const lat = parseFloat(v.latitud);
+                        const lng = parseFloat(v.longitud);
+                        return !isNaN(lat) && !isNaN(lng) &&
+                            v.latitud !== '' && v.longitud !== '' &&
+                            v.latitud !== '0' && v.longitud !== '0' &&
+                            lat !== 0 && lng !== 0;
+                    });
+
+                    if (!visitaConCoords) {
+                        console.log(`❌ Punto EXCLUIDO (sin coords válidas): "${key}" - ${visitasEnPunto.length} visitas`);
+                        skippedCount++;
+                        return;
+                    }
+
+                    const lat = parseFloat(visitaConCoords.latitud);
+                    const lng = parseFloat(visitaConCoords.longitud);
+
+                    console.log(`✅ Punto AGREGADO: "${key}" - coords: [${lat}, ${lng}] - ${visitasEnPunto.length} visitas`);
                     bounds.push([lat, lng]);
 
-                    const icon = visita.empresa === 'Multired' ? multiredIcon : serviredIcon;
-                    const empresaClass = visita.empresa === 'Multired' ? 'popup-empresa-multired' : 'popup-empresa-servired';
+                    // Determine icon based on empresa of first visit
+                    const icon = visitaConCoords.empresa === 'Multired' ? multiredIcon : serviredIcon;
+
+                    // Build popup with all visits for this punto_venta
+                    const visitasList = visitasEnPunto.map(v =>
+                        `<div style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <span style="color: #94a3b8;">📅</span> ${v.fecha} ${v.hora} 
+                            <span style="color: ${v.empresa === 'Multired' ? '#f87171' : '#4ade80'};">(${v.empresa})</span>
+                        </div>`
+                    ).join('');
 
                     const popup = `
-            <div style="min-width: 200px;">
-              <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: white;">${visita.punto_venta}</h3>
-              <div style="font-size: 12px; space-y: 4px;">
-                <p><span style="color: #94a3b8;">Supervisor:</span> <span style="color: white;">${visita.supervisor}</span></p>
-                <p><span style="color: #94a3b8;">Sucursal:</span> <span style="color: white;">${visita.sucursal}</span></p>
-                <p><span style="color: #94a3b8;">Fecha:</span> <span style="color: white;">${visita.fecha}</span></p>
-                <p><span style="color: #94a3b8;">Hora:</span> <span style="color: white;">${visita.hora}</span></p>
-                <p><span style="color: #94a3b8;">Empresa:</span> <span class="${empresaClass}">${visita.empresa}</span></p>
+            <div style="min-width: 250px; max-height: 300px;">
+              <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: white; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 8px;">
+                📍 ${visitaConCoords.punto_venta}
+              </h3>
+              <div style="font-size: 12px; margin-bottom: 8px;">
+                <p><span style="color: #94a3b8;">Supervisor:</span> <span style="color: white;">${visitaConCoords.supervisor}</span></p>
+                <p><span style="color: #94a3b8;">Sucursal:</span> <span style="color: white;">${visitaConCoords.sucursal}</span></p>
+              </div>
+              <div style="font-size: 11px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 8px; max-height: 150px; overflow-y: auto;">
+                <p style="color: #60a5fa; font-weight: 600; margin-bottom: 4px;">📋 ${visitasEnPunto.length} Visita(s):</p>
+                ${visitasList}
               </div>
             </div>
           `;
 
                     L.marker([lat, lng], { icon })
-                        .bindPopup(popup)
+                        .bindPopup(popup, { maxWidth: 300 })
                         .addTo(map);
                 });
 
@@ -364,6 +404,8 @@ function VisitMap({ visitas }: { visitas: Visita[] }) {
                 if (bounds.length > 0) {
                     map.fitBounds(bounds, { padding: [50, 50] });
                 }
+
+                console.log(`Mapa: ${puntoVentaMap.size} puntos de venta únicos de ${visitas.length} visitas totales`);
             });
         }
     }, [visitas]);

@@ -12,17 +12,15 @@ const dbConfig = {
 };
 
 // Create connection pool
-let pool: mysql.Pool | null = null;
+const pool = mysql.createPool(dbConfig);
 
-export function getPool(): mysql.Pool {
-    if (!pool) {
-        pool = mysql.createPool(dbConfig);
-    }
+export async function query<T>(sql: string, params?: any[]): Promise<T[]> {
+    const [rows] = await pool.query(sql, params || []);
+    return rows as T[];
+}
+
+export function getPool() {
     return pool;
 }
 
-export async function query<T>(sql: string, params?: any[]): Promise<T[]> {
-    const connection = getPool();
-    const [rows] = await connection.execute(sql, params);
-    return rows as T[];
-}
+export default pool;
