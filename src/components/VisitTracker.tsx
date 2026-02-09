@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 // API base URL - Now using Astro API routes
 const API_BASE = '/api';
@@ -42,11 +42,14 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
     const [error, setError] = useState<string | null>(null);
     const [filters, setFilters] = useState<Filters>({
         empresa: 'ambas',
-        fecha_inicio: getTodayDate(),  // Default to today
-        fecha_fin: getTodayDate(),     // Default to today
+        fecha_inicio: getTodayDate(),
+        fecha_fin: getTodayDate(),
         supervisor: ''
     });
-    const [activeTab, setActiveTab] = useState<'map' | 'table'>('map');
+    const [selectedVisita, setSelectedVisita] = useState<Visita | null>(null);
+    const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const pageSize = 15;
 
     // Load supervisors on mount
     useEffect(() => {
@@ -71,8 +74,8 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
         try {
             const params = new URLSearchParams();
             params.append('empresa', filters.empresa);
-            params.append('perfil', userPerfil);  // Pass user profile for filtering
-            params.append('user_login', userLogin);  // Pass user login
+            params.append('perfil', userPerfil);
+            params.append('user_login', userLogin);
             if (filters.fecha_inicio) params.append('fecha_inicio', filters.fecha_inicio);
             if (filters.fecha_fin) params.append('fecha_fin', filters.fecha_fin);
             if (filters.supervisor) params.append('supervisor', filters.supervisor);
@@ -82,15 +85,12 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
 
             if (data.success) {
                 setVisitas(data.data);
-                if (data.data.length === 0) {
-                    setError('No se encontraron visitas. Los datos disponibles son de abril-mayo 2022. Intenta con fechas de ese período o sin filtros de fecha.');
-                }
             } else {
-                setError(data.error || 'Error al cargar visitas');
+                setError(data.message || 'Error al cargar visitas');
             }
         } catch (err) {
-            console.error('Error fetching visitas:', err);
-            setError('Error de conexión. Verifica que la base de datos esté accesible.');
+            setError('Error de conexión al servidor');
+            console.error(err);
         } finally {
             setLoading(false);
         }
@@ -101,17 +101,28 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
     };
 
     const handleApplyFilters = () => {
+        setPage(1);
         fetchVisitas();
     };
 
-    const handleClearFilters = () => {
-        setFilters({
-            empresa: 'ambas',
-            fecha_inicio: '',
-            fecha_fin: '',
-            supervisor: ''
-        });
-    };
+    // Filter and paginate visits
+    const filteredVisitas = useMemo(() => {
+        if (!search) return visitas;
+        const term = search.toLowerCase();
+        return visitas.filter(v =>
+            v.punto_venta.toLowerCase().includes(term) ||
+            v.supervisor.toLowerCase().includes(term) ||
+            v.sucursal.toLowerCase().includes(term) ||
+            v.documento.toLowerCase().includes(term)
+        );
+    }, [visitas, search]);
+
+    const paginatedVisitas = useMemo(() => {
+        const start = (page - 1) * pageSize;
+        return filteredVisitas.slice(start, start + pageSize);
+    }, [filteredVisitas, page]);
+
+    const totalPages = Math.ceil(filteredVisitas.length / pageSize);
 
     // Stats
     const stats = useMemo(() => {
@@ -161,101 +172,50 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
                         />
                     </div>
 
-                    {/* Supervisor Filter */}
-                    <div className="flex-1 min-w-[220px]">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Supervisor</label>
-                        <select
-                            value={filters.supervisor}
-                            onChange={(e) => handleFilterChange('supervisor', e.target.value)}
-                            className="w-full px-4 py-2.5 bg-slate-800 border border-slate-600 rounded-xl text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                        >
-                            <option value="">Todos los supervisores</option>
-                            {supervisores.map((sup) => (
-                                <option key={sup} value={sup}>{sup}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Buttons */}
-                    <div className="flex gap-2">
-                        <button
-                            onClick={handleApplyFilters}
-                            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-blue-500/30 transition-all duration-200 flex items-center gap-2"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                            Buscar
-                        </button>
-                        <button
-                            onClick={handleClearFilters}
-                            className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-gray-300 font-medium rounded-xl transition"
-                        >
-                            Limpiar
-                        </button>
-                    </div>
-                </div>
-
-                {/* Stats */}
-                <div className="flex flex-wrap gap-4 mt-6 pt-6 border-t border-white/10">
-                    <div className="flex items-center gap-3 px-4 py-2 bg-slate-800/50 rounded-xl">
-                        <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-400">Total Visitas</p>
-                            <p className="text-xl font-bold text-white">{stats.total.toLocaleString()}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 px-4 py-2 bg-slate-800/50 rounded-xl">
-                        <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
-                            <span className="text-red-400 font-bold">M</span>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-400">Multired</p>
-                            <p className="text-xl font-bold text-red-400">{stats.multired.toLocaleString()}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3 px-4 py-2 bg-slate-800/50 rounded-xl">
-                        <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
-                            <span className="text-green-400 font-bold">S</span>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-400">Servired</p>
-                            <p className="text-xl font-bold text-green-400">{stats.servired.toLocaleString()}</p>
-                        </div>
-                    </div>
+                    {/* Apply Button */}
+                    <button
+                        onClick={handleApplyFilters}
+                        className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl font-medium hover:from-blue-500 hover:to-blue-400 transition-all duration-200 shadow-lg shadow-blue-500/25 flex items-center gap-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        Aplicar Filtros
+                    </button>
                 </div>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="flex gap-2">
-                <button
-                    onClick={() => setActiveTab('map')}
-                    className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center gap-2 ${activeTab === 'map'
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                        : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
-                        }`}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                    </svg>
-                    Mapa
-                </button>
-                <button
-                    onClick={() => setActiveTab('table')}
-                    className={`px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center gap-2 ${activeTab === 'table'
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                        : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
-                        }`}
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    Tabla ({stats.total.toLocaleString()})
-                </button>
+            {/* Stats Cards */}
+            <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-4 border border-white/20 shadow-2xl">
+                <div className="flex flex-wrap items-center justify-center gap-6">
+                    <div className="flex items-center gap-3 px-6 py-3 bg-slate-800/50 rounded-xl">
+                        <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                            <span className="text-2xl">📋</span>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-400">Total Visitas</p>
+                            <p className="text-2xl font-bold text-blue-400">{stats.total.toLocaleString()}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 px-6 py-3 bg-slate-800/50 rounded-xl">
+                        <div className="w-12 h-12 bg-red-500/20 rounded-lg flex items-center justify-center">
+                            <span className="text-red-400 font-bold text-lg">M</span>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-400">Multired</p>
+                            <p className="text-2xl font-bold text-red-400">{stats.multired.toLocaleString()}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 px-6 py-3 bg-slate-800/50 rounded-xl">
+                        <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
+                            <span className="text-green-400 font-bold text-lg">S</span>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-400">Servired</p>
+                            <p className="text-2xl font-bold text-green-400">{stats.servired.toLocaleString()}</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Error Message */}
@@ -271,32 +231,148 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
                 </div>
             )}
 
-            {/* Content */}
+            {/* Loading State */}
             {loading ? (
-                <div className="flex items-center justify-center h-96 bg-white/5 rounded-2xl">
-                    <div className="text-center">
-                        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-gray-400">Cargando visitas...</p>
-                    </div>
+                <div className="flex flex-col items-center justify-center py-20">
+                    <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+                    <p className="text-gray-400">Cargando visitas...</p>
                 </div>
             ) : (
                 <>
-                    {activeTab === 'map' && <VisitMap visitas={visitas} />}
-                    {activeTab === 'table' && <VisitTable visitas={visitas} />}
+                    {/* Visit List */}
+                    <div className="bg-white/5 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+                        {/* Search */}
+                        <div className="p-4 border-b border-white/10">
+                            <div className="relative">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por punto de venta, supervisor, sucursal o documento..."
+                                    value={search}
+                                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                                    className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Table */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="bg-slate-800/50">
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Punto de Venta</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Documento</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Supervisor</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Sucursal</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Hora</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Empresa</th>
+                                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">Ubicación</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {paginatedVisitas.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                </svg>
+                                                No se encontraron visitas
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        paginatedVisitas.map((visita, idx) => {
+                                            const hasCoords = visita.latitud && visita.longitud &&
+                                                visita.latitud !== '0' && visita.longitud !== '0';
+                                            return (
+                                                <tr key={idx} className="hover:bg-white/5 transition">
+                                                    <td className="px-4 py-3 text-sm text-white font-medium">{visita.punto_venta}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-300">{visita.documento}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-300">{visita.supervisor}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-300">{visita.sucursal}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-300">{visita.fecha}</td>
+                                                    <td className="px-4 py-3 text-sm text-gray-300">{visita.hora}</td>
+                                                    <td className="px-4 py-3">
+                                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${visita.empresa === 'Multired'
+                                                            ? 'bg-red-500/20 text-red-400 border border-red-400/30'
+                                                            : 'bg-green-500/20 text-green-400 border border-green-400/30'
+                                                            }`}>
+                                                            {visita.empresa}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        {hasCoords ? (
+                                                            <button
+                                                                onClick={() => setSelectedVisita(visita)}
+                                                                className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg text-xs font-medium hover:from-blue-500 hover:to-blue-400 transition-all flex items-center gap-1 mx-auto shadow-lg shadow-blue-500/20"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                </svg>
+                                                                Ver en Mapa
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-500">Sin ubicación</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Pagination */}
+                        <div className="flex items-center justify-between px-4 py-3 border-t border-white/10">
+                            <p className="text-sm text-gray-400">
+                                Mostrando {filteredVisitas.length > 0 ? ((page - 1) * pageSize) + 1 : 0} - {Math.min(page * pageSize, filteredVisitas.length)} de {filteredVisitas.length} visitas
+                            </p>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition text-sm"
+                                >
+                                    Anterior
+                                </button>
+                                <span className="px-3 py-1.5 text-gray-400 text-sm">
+                                    Página {page} de {totalPages || 1}
+                                </span>
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages || totalPages === 0}
+                                    className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition text-sm"
+                                >
+                                    Siguiente
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </>
+            )}
+
+            {/* Map Modal */}
+            {selectedVisita && (
+                <MapModal
+                    visita={selectedVisita}
+                    onClose={() => setSelectedVisita(null)}
+                />
             )}
         </div>
     );
 }
 
-// Map Component
-function VisitMap({ visitas }: { visitas: Visita[] }) {
+// Map Modal Component
+function MapModal({ visita, onClose }: { visita: Visita; onClose: () => void }) {
     useEffect(() => {
         // Load Leaflet dynamically
         if (typeof window !== 'undefined') {
             import('leaflet').then((L) => {
-                // Remove existing map
-                const container = document.getElementById('map');
+                const container = document.getElementById('single-map');
                 if (!container) return;
 
                 // Clear previous map instance
@@ -305,218 +381,101 @@ function VisitMap({ visitas }: { visitas: Visita[] }) {
                     container.innerHTML = '';
                 }
 
-                // Create map centered on Colombia
-                const map = L.map('map').setView([3.45, -76.53], 12);
+                const lat = parseFloat(visita.latitud);
+                const lng = parseFloat(visita.longitud);
+
+                if (isNaN(lat) || isNaN(lng)) return;
+
+                // Create map centered on the visit location
+                const map = L.map('single-map').setView([lat, lng], 16);
 
                 // Add tile layer
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 }).addTo(map);
 
-                // Custom icons
-                const multiredIcon = L.divIcon({
-                    html: `<div style="background: linear-gradient(135deg, #ef4444, #dc2626); width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: bold;"></div>`,
+                // Custom icon
+                const icon = L.divIcon({
+                    html: `<div style="background: linear-gradient(135deg, ${visita.empresa === 'Multired' ? '#ef4444, #dc2626' : '#22c55e, #16a34a'}); width: 32px; height: 32px; border-radius: 50%; border: 4px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.4);"></div>`,
                     className: 'custom-marker',
-                    iconSize: [28, 28],
-                    iconAnchor: [14, 14]
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
                 });
 
-                const serviredIcon = L.divIcon({
-                    html: `<div style="background: linear-gradient(135deg, #22c55e, #16a34a); width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: bold;"></div>`,
-                    className: 'custom-marker',
-                    iconSize: [28, 28],
-                    iconAnchor: [14, 14]
-                });
-
-                // Group visits by punto_venta NAME ONLY (ignore coordinate variations)
-                const puntoVentaMap = new Map<string, Visita[]>();
-                visitas.forEach((visita) => {
-                    const key = visita.punto_venta.trim().toUpperCase(); // Group by name only
-                    if (!puntoVentaMap.has(key)) {
-                        puntoVentaMap.set(key, []);
-                    }
-                    puntoVentaMap.get(key)!.push(visita);
-                });
-
-                console.log('Total puntos de venta únicos:', puntoVentaMap.size);
-                console.log('Puntos:', Array.from(puntoVentaMap.keys()));
-
-                // Add markers for each unique punto_venta
-                const bounds: [number, number][] = [];
-                let skippedCount = 0;
-
-                puntoVentaMap.forEach((visitasEnPunto, key) => {
-                    // Find the first visit with valid coordinates
-                    const visitaConCoords = visitasEnPunto.find(v => {
-                        const lat = parseFloat(v.latitud);
-                        const lng = parseFloat(v.longitud);
-                        return !isNaN(lat) && !isNaN(lng) &&
-                            v.latitud !== '' && v.longitud !== '' &&
-                            v.latitud !== '0' && v.longitud !== '0' &&
-                            lat !== 0 && lng !== 0;
-                    });
-
-                    if (!visitaConCoords) {
-                        console.log(`❌ Punto EXCLUIDO (sin coords válidas): "${key}" - ${visitasEnPunto.length} visitas`);
-                        skippedCount++;
-                        return;
-                    }
-
-                    const lat = parseFloat(visitaConCoords.latitud);
-                    const lng = parseFloat(visitaConCoords.longitud);
-
-                    console.log(`✅ Punto AGREGADO: "${key}" - coords: [${lat}, ${lng}] - ${visitasEnPunto.length} visitas`);
-                    bounds.push([lat, lng]);
-
-                    // Determine icon based on empresa of first visit
-                    const icon = visitaConCoords.empresa === 'Multired' ? multiredIcon : serviredIcon;
-
-                    // Build popup with all visits for this punto_venta
-                    const visitasList = visitasEnPunto.map(v =>
-                        `<div style="padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                            <span style="color: #94a3b8;">📅</span> ${v.fecha} ${v.hora} 
-                            <span style="color: ${v.empresa === 'Multired' ? '#f87171' : '#4ade80'};">(${v.empresa})</span>
-                        </div>`
-                    ).join('');
-
-                    const popup = `
-            <div style="min-width: 250px; max-height: 300px;">
-              <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: white; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 8px;">
-                📍 ${visitaConCoords.punto_venta}
-              </h3>
-              <div style="font-size: 12px; margin-bottom: 8px;">
-                <p><span style="color: #94a3b8;">Supervisor:</span> <span style="color: white;">${visitaConCoords.supervisor}</span></p>
-                <p><span style="color: #94a3b8;">Sucursal:</span> <span style="color: white;">${visitaConCoords.sucursal}</span></p>
-              </div>
-              <div style="font-size: 11px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 8px; max-height: 150px; overflow-y: auto;">
-                <p style="color: #60a5fa; font-weight: 600; margin-bottom: 4px;">📋 ${visitasEnPunto.length} Visita(s):</p>
-                ${visitasList}
-              </div>
-            </div>
-          `;
-
-                    L.marker([lat, lng], { icon })
-                        .bindPopup(popup, { maxWidth: 300 })
-                        .addTo(map);
-                });
-
-                // Fit bounds if we have markers
-                if (bounds.length > 0) {
-                    map.fitBounds(bounds, { padding: [50, 50] });
-                }
-
-                console.log(`Mapa: ${puntoVentaMap.size} puntos de venta únicos de ${visitas.length} visitas totales`);
+                // Add marker
+                L.marker([lat, lng], { icon })
+                    .bindPopup(`
+                        <div style="min-width: 220px;">
+                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: white;">📍 ${visita.punto_venta}</h3>
+                            <div style="font-size: 12px;">
+                                <p><span style="color: #94a3b8;">Documento:</span> <span style="color: white;">${visita.documento}</span></p>
+                                <p><span style="color: #94a3b8;">Supervisor:</span> <span style="color: white;">${visita.supervisor}</span></p>
+                                <p><span style="color: #94a3b8;">Sucursal:</span> <span style="color: white;">${visita.sucursal}</span></p>
+                                <p><span style="color: #94a3b8;">Fecha:</span> <span style="color: white;">${visita.fecha} ${visita.hora}</span></p>
+                                <p><span style="color: #94a3b8;">Coords:</span> <span style="color: white;">${lat.toFixed(6)}, ${lng.toFixed(6)}</span></p>
+                            </div>
+                        </div>
+                    `, { maxWidth: 300 })
+                    .addTo(map)
+                    .openPopup();
             });
         }
-    }, [visitas]);
+    }, [visita]);
 
     return (
-        <div className="bg-white/5 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-            <div id="map" className="h-[600px] w-full"></div>
-        </div>
-    );
-}
-
-// Table Component
-function VisitTable({ visitas }: { visitas: Visita[] }) {
-    const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
-    const pageSize = 20;
-
-    const filteredVisitas = useMemo(() => {
-        if (!search) return visitas;
-        const term = search.toLowerCase();
-        return visitas.filter(v =>
-            v.punto_venta.toLowerCase().includes(term) ||
-            v.supervisor.toLowerCase().includes(term) ||
-            v.sucursal.toLowerCase().includes(term)
-        );
-    }, [visitas, search]);
-
-    const paginatedVisitas = useMemo(() => {
-        const start = (page - 1) * pageSize;
-        return filteredVisitas.slice(start, start + pageSize);
-    }, [filteredVisitas, page]);
-
-    const totalPages = Math.ceil(filteredVisitas.length / pageSize);
-
-    return (
-        <div className="bg-white/5 rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
-            {/* Search */}
-            <div className="p-4 border-b border-white/10">
-                <div className="relative">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <input
-                        type="text"
-                        placeholder="Buscar por punto de venta, supervisor o sucursal..."
-                        value={search}
-                        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                        className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                    />
-                </div>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr className="bg-slate-800/50">
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Punto de Venta</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Supervisor</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Sucursal</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Hora</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Empresa</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {paginatedVisitas.map((visita, idx) => (
-                            <tr key={idx} className="hover:bg-white/5 transition">
-                                <td className="px-4 py-3 text-sm text-white">{visita.punto_venta}</td>
-                                <td className="px-4 py-3 text-sm text-gray-300">{visita.supervisor}</td>
-                                <td className="px-4 py-3 text-sm text-gray-300">{visita.sucursal}</td>
-                                <td className="px-4 py-3 text-sm text-gray-300">{visita.fecha}</td>
-                                <td className="px-4 py-3 text-sm text-gray-300">{visita.hora}</td>
-                                <td className="px-4 py-3">
-                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${visita.empresa === 'Multired'
-                                        ? 'bg-red-500/20 text-red-400 border border-red-400/30'
-                                        : 'bg-green-500/20 text-green-400 border border-green-400/30'
-                                        }`}>
-                                        {visita.empresa}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Pagination */}
-            <div className="flex items-center justify-between px-4 py-3 border-t border-white/10">
-                <p className="text-sm text-gray-400">
-                    Mostrando {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, filteredVisitas.length)} de {filteredVisitas.length} visitas
-                </p>
-                <div className="flex gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="bg-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl border border-white/10 overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-slate-800/50">
+                    <div>
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            {visita.punto_venta}
+                        </h2>
+                        <p className="text-sm text-gray-400 mt-1">
+                            {visita.fecha} a las {visita.hora} • {visita.supervisor}
+                        </p>
+                    </div>
                     <button
-                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition text-sm"
+                        onClick={onClose}
+                        className="p-2 hover:bg-white/10 rounded-lg transition text-gray-400 hover:text-white"
                     >
-                        Anterior
-                    </button>
-                    <span className="px-3 py-1.5 text-gray-400 text-sm">
-                        Página {page} de {totalPages}
-                    </span>
-                    <button
-                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition text-sm"
-                    >
-                        Siguiente
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
                     </button>
                 </div>
+
+                {/* Visit Info */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-6 py-4 bg-slate-800/30 border-b border-white/10">
+                    <div>
+                        <p className="text-xs text-gray-400">Documento</p>
+                        <p className="text-sm text-white font-medium">{visita.documento}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-400">Sucursal</p>
+                        <p className="text-sm text-white font-medium">{visita.sucursal}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-400">Empresa</p>
+                        <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${visita.empresa === 'Multired'
+                            ? 'bg-red-500/20 text-red-400'
+                            : 'bg-green-500/20 text-green-400'
+                            }`}>
+                            {visita.empresa}
+                        </span>
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-400">Coordenadas</p>
+                        <p className="text-sm text-white font-medium font-mono">{parseFloat(visita.latitud).toFixed(4)}, {parseFloat(visita.longitud).toFixed(4)}</p>
+                    </div>
+                </div>
+
+                {/* Map */}
+                <div id="single-map" className="h-[450px] w-full"></div>
             </div>
         </div>
     );

@@ -20,8 +20,8 @@ const PROFILE_RULES: Record<string, { tables: string[], perfilFilter?: string, e
     'COMERCIAL-SERVIRED': { tables: ['registrovisitasservired'], excludePerfilFilter: 'AUDITORIA-OPERATIVA' },
     'APLICACIONES': { tables: ['registrovisitasservired'], excludePerfilFilter: 'AUDITORIA-OPERATIVA' },
 
-    // Servired audit - sees only Servired visits where supervisor IS AUDITORIA-OPERATIVA
-    'AUDITORIA-SERVIRED': { tables: ['registrovisitasservired'], perfilFilter: 'AUDITORIA-OPERATIVA' },
+    // Servired audit - sees Servired AND Multired visits where supervisor IS AUDITORIA-OPERATIVA
+    'AUDITORIA-SERVIRED': { tables: ['registrovisitasservired', 'registrovisitas'], perfilFilter: 'AUDITORIA-OPERATIVA' },
 
     // Multired commercial - sees Multired visits where supervisor is NOT AUDITORIA-OPERATIVA
     'COMERCIAL-MULTIRED': { tables: ['registrovisitas'], excludePerfilFilter: 'AUDITORIA-OPERATIVA' },
