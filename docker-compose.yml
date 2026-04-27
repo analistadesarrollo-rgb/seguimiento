@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: visitas-app
+    ports:
+      - "4322:4322"
+    environment:
+      - NODE_ENV=production
+      - PORT=4322
+    volumes:
+      - ./storage:/app/storage
+    restart: unless-stopped
+    networks:
+      - visitas-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4322"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  nginx:
+    image: nginx:alpine
+    container_name: visitas-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./logs:/var/log/nginx
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - visitas-network
+
+networks:
+  visitas-network:
+    driver: bridge
