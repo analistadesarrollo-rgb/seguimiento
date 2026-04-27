@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import PermissionsManager from '../components/PermissionsManager';
 import VisitTracker from '../components/VisitTracker';
 
 // Check authentication
@@ -17,6 +18,8 @@ if (sessionCookie) {
     // No session, redirect to login
     return Astro.redirect('/login');
 }
+
+const userPerfil = user.perfil?.trim().toUpperCase();
 ---
 
 <Layout title="Dashboard - Seguimiento de Visitas">
@@ -66,6 +69,12 @@ if (sessionCookie) {
 
         <!-- Main content -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {userPerfil === 'APLICACIONES' && (
+                <div class="mb-8">
+                    <PermissionsManager client:load userPerfil={userPerfil} />
+                </div>
+            )}
+
             <VisitTracker client:load userPerfil={user.perfil} userLogin={user.login} />
         </div>
     </main>

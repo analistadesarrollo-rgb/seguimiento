@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { query } from '../../lib/db';
+import { getAllowedOriginProfilesForViewer } from '../../lib/visitPermissions';
 
 interface Visita {
     ip: string;
@@ -51,22 +52,54 @@ const PROFILE_RULES: Record<string, { tables: string[], perfilFilter?: string, e
     'SUPERVISOR': { tables: ['registrovisitas', 'registrovisitasservired'] },
 };
 
+const unrestrictedProfiles = new Set([
+    'ADMINISTRADOR',
+    'ADMIN',
+    'GERENCIA',
+    'TECNOLOGIA',
+    'ADMINISTRACION',
+    'ADMINISTRACION_MULTIRED',
+    'ADMINISTRACION_SERVIRED',
+    'COORDINADOR',
+    'COORDINADOR COMERCIAL',
+    'SUPERVISOR',
+    'APLICACIONES'
+]);
+
+const normalizePerfil = (value: string) => value.trim().toUpperCase();
+
+const getAllowedOriginProfiles = async (viewerPerfil: string) => {
+    if (unrestrictedProfiles.has(viewerPerfil)) {
+        return [];
+    }
+
+    return getAllowedOriginProfilesForViewer(viewerPerfil);
+};
+
 export const GET: APIRoute = async ({ url }) => {
     try {
         const empresa = url.searchParams.get('empresa') || 'ambas';
         const fecha_inicio = url.searchParams.get('fecha_inicio');
         const fecha_fin = url.searchParams.get('fecha_fin');
         const supervisor = url.searchParams.get('supervisor');
-        const perfil = url.searchParams.get('perfil')?.toUpperCase() || '';
+        const perfil = normalizePerfil(url.searchParams.get('perfil') || '');
         const userLogin = url.searchParams.get('user_login') || '';
 
         let visitas: Visita[] = [];
+        const allowedOriginProfiles = await getAllowedOriginProfiles(perfil);
+        const hasDynamicRestriction = allowedOriginProfiles.length > 0;
+
+        const startDate = fecha_inicio && fecha_inicio.trim() ? fecha_inicio.trim() : null;
+        const endDate = fecha_fin && fecha_fin.trim() ? fecha_fin.trim() : null;
+        const normalizedStartDate = startDate && endDate && startDate > endDate ? endDate : startDate;
+        const normalizedEndDate = startDate && endDate && startDate > endDate ? startDate : endDate;
 
         // Get profile rules (default to both tables if profile not defined)
         const rules = PROFILE_RULES[perfil] || { tables: ['registrovisitas', 'registrovisitasservired'] };
 
         // Build query function
         const buildQuery = (tabla: string, empresaNombre: string) => {
+            const profileExpr = 'COALESCE(b.perfil, b2.perfil)';
             let sql = `
         SELECT 
           s.ip,
@@ -74,6 +107,7 @@ export const GET: APIRoute = async ({ url }) => {
           s.documento,
           COALESCE(p.NOMBRE, s.sucursal) AS sucursal,
           COALESCE(b.nombre, b2.nombre, s.supervisor) AS supervisor,
+          ${profileExpr} AS perfil_supervisor,
           DATE_FORMAT(s.fechavisita, '%Y-%m-%d') AS fecha,
           TIME_FORMAT(s.horavisita, '%H:%i:%s') AS hora,
           s.latitud,
@@ -91,15 +125,24 @@ export const GET: APIRoute = async ({ url }) => {
 
             const params: any[] = [];
 
-            // Apply profile-based filters
-            if (rules.perfilFilter) {
-                sql += ' AND b.perfil = ?';
-                params.push(rules.perfilFilter);
-            }
+            // Apply profile-based filters.
+            // If there is an explicit permissions mapping for this viewer (hasDynamicRestriction),
+            // respect that whitelist and skip the built-in perfilFilter/excludePerfilFilter to allow
+            // admin-configured overrides (e.g., give AUDITORIA-SERVIRED visibility over AUDITORIA-MULTIRED).
+            if (hasDynamicRestriction) {
+                const placeholders = allowedOriginProfiles.map(() => '?').join(', ');
+                sql += ` AND ${profileExpr} IN (${placeholders})`;
+                params.push(...allowedOriginProfiles);
+            } else {
+                if (rules.perfilFilter) {
+                    sql += ` AND ${profileExpr} = ?`;
+                    params.push(rules.perfilFilter);
+                }
 
-            if (rules.excludePerfilFilter) {
-                sql += ' AND (b.perfil IS NULL OR b.perfil != ?)';
-                params.push(rules.excludePerfilFilter);
+                if (rules.excludePerfilFilter) {
+                    sql += ` AND (${profileExpr} IS NULL OR ${profileExpr} != ?)`;
+                    params.push(rules.excludePerfilFilter);
+                }
             }
 
             // Supervisor profile: only see own visits
@@ -108,14 +151,15 @@ export const GET: APIRoute = async ({ url }) => {
                 params.push(userLogin);
             }
 
-            if (fecha_inicio) {
-                sql += ' AND s.fechavisita >= ?';
-                params.push(fecha_inicio);
-            }
-
-            if (fecha_fin) {
-                sql += ' AND s.fechavisita <= ?';
-                params.push(fecha_fin);
+            if (normalizedStartDate && normalizedEndDate) {
+                sql += ' AND DATE(s.fechavisita) BETWEEN ? AND ?';
+                params.push(normalizedStartDate, normalizedEndDate);
+            } else if (normalizedStartDate) {
+                sql += ' AND DATE(s.fechavisita) >= ?';
+                params.push(normalizedStartDate);
+            } else if (normalizedEndDate) {
+                sql += ' AND DATE(s.fechavisita) <= ?';
+                params.push(normalizedEndDate);
             }
 
             if (supervisor) {

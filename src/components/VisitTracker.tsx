@@ -86,7 +86,7 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
             if (data.success) {
                 setVisitas(data.data);
             } else {
-                setError(data.message || 'Error al cargar visitas');
+                setError(data.message || data.error || data.details || 'Error al cargar visitas');
             }
         } catch (err) {
             setError('Error de conexión al servidor');

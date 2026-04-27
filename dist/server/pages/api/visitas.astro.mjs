@@ -1,12 +1,13 @@
 import { q as query } from '../../chunks/db_D5YtOHEy.mjs';
+import { g as getAllowedOriginProfilesForViewer } from '../../chunks/visitPermissions_BFAB2cjP.mjs';
 export { renderers } from '../../renderers.mjs';
 
 const PROFILE_RULES = {
   // Servired commercial - sees Servired visits where supervisor is NOT AUDITORIA-OPERATIVA
   "COMERCIAL-SERVIRED": { tables: ["registrovisitasservired"], excludePerfilFilter: "AUDITORIA-OPERATIVA" },
   "APLICACIONES": { tables: ["registrovisitasservired"], excludePerfilFilter: "AUDITORIA-OPERATIVA" },
-  // Servired audit - sees only Servired visits where supervisor IS AUDITORIA-OPERATIVA
-  "AUDITORIA-SERVIRED": { tables: ["registrovisitasservired"], perfilFilter: "AUDITORIA-OPERATIVA" },
+  // Servired audit - sees Servired AND Multired visits where supervisor IS AUDITORIA-OPERATIVA
+  "AUDITORIA-SERVIRED": { tables: ["registrovisitasservired", "registrovisitas"], perfilFilter: "AUDITORIA-OPERATIVA" },
   // Multired commercial - sees Multired visits where supervisor is NOT AUDITORIA-OPERATIVA
   "COMERCIAL-MULTIRED": { tables: ["registrovisitas"], excludePerfilFilter: "AUDITORIA-OPERATIVA" },
   // Multired audit - sees only Multired visits where supervisor IS AUDITORIA-OPERATIVA
@@ -28,17 +29,44 @@ const PROFILE_RULES = {
   // Supervisors - see their own visits (by login)
   "SUPERVISOR": { tables: ["registrovisitas", "registrovisitasservired"] }
 };
+const unrestrictedProfiles = /* @__PURE__ */ new Set([
+  "ADMINISTRADOR",
+  "ADMIN",
+  "GERENCIA",
+  "TECNOLOGIA",
+  "ADMINISTRACION",
+  "ADMINISTRACION_MULTIRED",
+  "ADMINISTRACION_SERVIRED",
+  "COORDINADOR",
+  "COORDINADOR COMERCIAL",
+  "SUPERVISOR",
+  "APLICACIONES"
+]);
+const normalizePerfil = (value) => value.trim().toUpperCase();
+const getAllowedOriginProfiles = async (viewerPerfil) => {
+  if (unrestrictedProfiles.has(viewerPerfil)) {
+    return [];
+  }
+  return getAllowedOriginProfilesForViewer(viewerPerfil);
+};
 const GET = async ({ url }) => {
   try {
     const empresa = url.searchParams.get("empresa") || "ambas";
     const fecha_inicio = url.searchParams.get("fecha_inicio");
     const fecha_fin = url.searchParams.get("fecha_fin");
     const supervisor = url.searchParams.get("supervisor");
-    const perfil = url.searchParams.get("perfil")?.toUpperCase() || "";
+    const perfil = normalizePerfil(url.searchParams.get("perfil") || "");
     const userLogin = url.searchParams.get("user_login") || "";
     let visitas = [];
+    const allowedOriginProfiles = await getAllowedOriginProfiles(perfil);
+    const hasDynamicRestriction = allowedOriginProfiles.length > 0;
+    const startDate = fecha_inicio && fecha_inicio.trim() ? fecha_inicio.trim() : null;
+    const endDate = fecha_fin && fecha_fin.trim() ? fecha_fin.trim() : null;
+    const normalizedStartDate = startDate && endDate && startDate > endDate ? endDate : startDate;
+    const normalizedEndDate = startDate && endDate && startDate > endDate ? startDate : endDate;
     const rules = PROFILE_RULES[perfil] || { tables: ["registrovisitas", "registrovisitasservired"] };
     const buildQuery = (tabla, empresaNombre) => {
+      const profileExpr = "COALESCE(b.perfil, b2.perfil)";
       let sql = `
         SELECT 
           s.ip,
@@ -46,6 +74,7 @@ const GET = async ({ url }) => {
           s.documento,
           COALESCE(p.NOMBRE, s.sucursal) AS sucursal,
           COALESCE(b.nombre, b2.nombre, s.supervisor) AS supervisor,
+          ${profileExpr} AS perfil_supervisor,
           DATE_FORMAT(s.fechavisita, '%Y-%m-%d') AS fecha,
           TIME_FORMAT(s.horavisita, '%H:%i:%s') AS hora,
           s.latitud,
@@ -61,25 +90,33 @@ const GET = async ({ url }) => {
           AND s.longitud != ''
       `;
       const params = [];
-      if (rules.perfilFilter) {
-        sql += " AND b.perfil = ?";
-        params.push(rules.perfilFilter);
-      }
-      if (rules.excludePerfilFilter) {
-        sql += " AND (b.perfil IS NULL OR b.perfil != ?)";
-        params.push(rules.excludePerfilFilter);
+      if (hasDynamicRestriction) {
+        const placeholders = allowedOriginProfiles.map(() => "?").join(", ");
+        sql += ` AND ${profileExpr} IN (${placeholders})`;
+        params.push(...allowedOriginProfiles);
+      } else {
+        if (rules.perfilFilter) {
+          sql += ` AND ${profileExpr} = ?`;
+          params.push(rules.perfilFilter);
+        }
+        if (rules.excludePerfilFilter) {
+          sql += ` AND (${profileExpr} IS NULL OR ${profileExpr} != ?)`;
+          params.push(rules.excludePerfilFilter);
+        }
       }
       if (perfil === "SUPERVISOR" && userLogin) {
         sql += " AND s.supervisor = ?";
         params.push(userLogin);
       }
-      if (fecha_inicio) {
-        sql += " AND s.fechavisita >= ?";
-        params.push(fecha_inicio);
-      }
-      if (fecha_fin) {
-        sql += " AND s.fechavisita <= ?";
-        params.push(fecha_fin);
+      if (normalizedStartDate && normalizedEndDate) {
+        sql += " AND DATE(s.fechavisita) BETWEEN ? AND ?";
+        params.push(normalizedStartDate, normalizedEndDate);
+      } else if (normalizedStartDate) {
+        sql += " AND DATE(s.fechavisita) >= ?";
+        params.push(normalizedStartDate);
+      } else if (normalizedEndDate) {
+        sql += " AND DATE(s.fechavisita) <= ?";
+        params.push(normalizedEndDate);
       }
       if (supervisor) {
         sql += " AND (s.supervisor = ? OR b.nombre LIKE ?)";
