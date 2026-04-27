@@ -15,7 +15,7 @@ services:
       - ./storage:/app/storage
     restart: unless-stopped
     networks:
-      - visitas-network
+      - red-gane-int
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4322"]
       interval: 30s
@@ -37,8 +37,8 @@ services:
       - app
     restart: unless-stopped
     networks:
-      - visitas-network
+      - red-gane-int
 
 networks:
-  visitas-network:
-    driver: bridge
+  red-gane-int:
+    external: true
