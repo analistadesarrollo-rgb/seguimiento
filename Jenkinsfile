@@ -6,7 +6,6 @@ pipeline {
         REGISTRY = "docker.io"
         IMAGE_NAME = "tu-usuario/visitas-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        DOCKER_CREDENTIALS = credentials('docker-credentials')
         GIT_REPO = "https://github.com/tu-usuario/visitas_maps.git"
         DEPLOY_SERVER = "production.server.com"
         DEPLOY_USER = "deploy"
@@ -75,12 +74,14 @@ pipeline {
             }
             steps {
                 echo '📤 Subiendo imagen a registro...'
-                sh '''
-                    echo $DOCKER_CREDENTIALS_PSW | docker login -u $DOCKER_CREDENTIALS_USR --password-stdin ${REGISTRY}
-                    docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-                    docker push ${REGISTRY}/${IMAGE_NAME}:latest
-                    docker logout ${REGISTRY}
-                '''
+                withCredentials([usernamePassword(credentialsId: 'docker-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin ${REGISTRY}
+                        docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${REGISTRY}/${IMAGE_NAME}:latest
+                        docker logout ${REGISTRY}
+                    '''
+                }
             }
         }
 
@@ -181,8 +182,7 @@ EOF
         }
 
         always {
-            // Limpiar recursos
-            sh 'docker system prune -f'
+            echo '🧹 Limpieza finalizada'
         }
     }
 }
