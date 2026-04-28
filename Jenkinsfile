@@ -32,10 +32,23 @@ pipeline {
                     sh '''
                         docker run --rm \
                             --user "$(id -u):$(id -g)" \
-                            -v "$PWD":/app \
-                            -w /app \
+                            -v "$PWD":/src \
+                            -e HOME=/tmp \
+                            -e npm_config_cache=/tmp/.npm \
                             node:18-alpine \
-                            sh -lc "npm ci && npm run build"
+                            sh -lc '
+                                set -e
+                                rm -rf /tmp/build
+                                mkdir -p /tmp/build
+                                cd /src
+                                find . -mindepth 1 -maxdepth 1 \
+                                    ! -name node_modules \
+                                    ! -name dist \
+                                    -exec cp -a {} /tmp/build/ \;
+                                cd /tmp/build
+                                npm ci --cache /tmp/.npm
+                                npm run build
+                            '
                     '''
                 }
             }
