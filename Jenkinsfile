@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+    }
+
     environment {
         // Variables de configuración
         REGISTRY = "docker.io"
@@ -15,6 +19,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo '🔄 Clonando repositorio...'
+                deleteDir()
                 checkout scm
             }
         }
@@ -24,6 +29,7 @@ pipeline {
                 echo '🏗️  Construyendo aplicación...'
                 sh '''
                     docker run --rm \
+                        --user "$(id -u):$(id -g)" \
                         -v "$PWD":/app \
                         -w /app \
                         node:18-alpine \
