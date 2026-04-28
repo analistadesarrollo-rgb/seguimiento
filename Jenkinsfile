@@ -122,27 +122,24 @@ pipeline {
 
                         ssh -i /var/lib/jenkins/.ssh/deploy_key \
                             ${DEPLOY_USER}@${DEPLOY_SERVER} << EOF
-                            
                         cd /opt/visitas-app
 
-                        cat > .env <<ENVEOF
-DB_HOST=$DB_HOST
-DB_USER=$DB_USER
-DB_PASS=$DB_PASS
-DB_NAME=$DB_NAME
-ENVEOF
-                        
-                        # Pull última versión
+                        export DB_HOST="$DB_HOST"
+                        export DB_USER="$DB_USER"
+                        export DB_PASS="$DB_PASS"
+                        export DB_NAME="$DB_NAME"
+                        export REGISTRY="${REGISTRY}"
+                        export IMAGE_NAME="${IMAGE_NAME}"
+
+                        # Asegurar que el compose del servidor está actualizado
                         git pull origin main
-                        
-                        # Pull imagen Docker
-                        docker pull ${REGISTRY}/${IMAGE_NAME}:latest
-                        
+
                         # Detener contenedores actuales
-                        docker-compose down
+                        sudo docker compose down
                         
-                        # Iniciar nuevos contenedores
-                        docker-compose up -d
+                        # Descargar y levantar la imagen publicada por Jenkins
+                        sudo docker compose pull
+                        sudo docker compose up -d
                         
                         # Verificar salud
                         sleep 5
