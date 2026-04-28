@@ -8,23 +8,12 @@ pipeline {
     environment {
         // Variables de configuración
         REGISTRY = "docker.io"
-        IMAGE_NAME = "tu-usuario/visitas-app"
-        IMAGE_TAG = "${BUILD_NUMBER}"
-        GIT_REPO = "https://github.com/tu-usuario/visitas_maps.git"
-        DEPLOY_SERVER = "seguimiento.serviredgane.cloud"
-        DEPLOY_USER = "deploy"
-        DB_HOST = "172.20.1.92"
-        DB_USER = "cliente"
-        DB_PASS = "adminadmon"
-        DB_NAME = "appseguimiento"
-    }
 
-    stages {
-        stage('Checkout') {
-            steps {
-                echo '🔄 Clonando repositorio...'
-                dir('source') {
-                    checkout scm
+                        # Levantar contenedores con la configuración del compose
+                        docker compose down
+                        docker compose up -d --build
+                        DB_NAME="${DB_NAME}" \
+                        docker compose up -d --build
                 }
             }
         }
@@ -128,17 +117,7 @@ pipeline {
                         # Asegurar que el compose del servidor está actualizado
                         git pull origin main
 
-                        # Persistir credenciales de BD para docker compose
-                        cat > /opt/visitas-app/.env <<EOF_INNER
-DB_HOST=${DB_HOST}
-DB_USER=${DB_USER}
-DB_PASS=${DB_PASS}
-DB_NAME=${DB_NAME}
-EOF_INNER
-
-                        chmod 600 /opt/visitas-app/.env
-
-                        # Levantar contenedores con el .env recién creado
+                        # Levantar contenedores con la configuración del compose
                         docker compose down
                         docker compose up -d --build
 
