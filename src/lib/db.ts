@@ -10,27 +10,31 @@ const requiredEnv = (key: string) => {
     return value;
 };
 
-// Database configuration
-const dbConfig = {
-    host: requiredEnv('DB_HOST'),
-    user: requiredEnv('DB_USER'),
-    password: requiredEnv('DB_PASS'),
-    database: requiredEnv('DB_NAME'),
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+let pool: mysql.Pool | null = null;
+
+const ensurePool = () => {
+    if (!pool) {
+        pool = mysql.createPool({
+            host: requiredEnv('DB_HOST'),
+            user: requiredEnv('DB_USER'),
+            password: requiredEnv('DB_PASS'),
+            database: requiredEnv('DB_NAME'),
+            waitForConnections: true,
+            connectionLimit: 10,
+            queueLimit: 0
+        });
+    }
+
+    return pool;
 };
 
-// Create connection pool
-const pool = mysql.createPool(dbConfig);
-
 export async function query<T>(sql: string, params?: any[]): Promise<T[]> {
-    const [rows] = await pool.query(sql, params || []);
+    const [rows] = await ensurePool().query(sql, params || []);
     return rows as T[];
 }
 
 export function getPool() {
-    return pool;
+    return ensurePool();
 }
 
 export default pool;

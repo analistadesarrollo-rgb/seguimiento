@@ -13,7 +13,8 @@ interface Usuario {
 export const POST: APIRoute = async ({ request, cookies }) => {
     try {
         const body = await request.json();
-        const { login, password } = body;
+        const login = typeof body?.login === 'string' ? body.login.trim() : '';
+        const password = typeof body?.password === 'string' ? body.password.trim() : '';
 
         if (!login || !password) {
             return new Response(JSON.stringify({
@@ -29,7 +30,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         const sql = `
             SELECT id, login, pass, nombre, perfil, activo 
             FROM bdpersona.tbusuario 
-            WHERE login = ? AND pass = ? AND activo != 0
+                        WHERE UPPER(TRIM(login)) = UPPER(TRIM(?))
+                            AND TRIM(pass) = TRIM(?)
+                            AND activo != 0
         `;
 
         const users = await query<Usuario>(sql, [login, password]);

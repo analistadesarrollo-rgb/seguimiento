@@ -117,20 +117,22 @@ import Layout from '../layouts/Layout.astro';
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ login, password })
             });
+
+            const contentType = response.headers.get('content-type') || '';
+            const isJson = contentType.includes('application/json');
+            const data = isJson ? await response.json() : { success: false, error: await response.text() };
             
-            const data = await response.json();
-            
-            if (data.success) {
+            if (response.ok && data.success) {
                 window.location.href = '/dashboard';
             } else {
                 if (errorMsg) {
-                    errorMsg.textContent = data.error || 'Error al iniciar sesión';
+                    errorMsg.textContent = data.error || `Error al iniciar sesión (${response.status})`;
                     errorMsg.classList.remove('hidden');
                 }
             }
         } catch (error) {
             if (errorMsg) {
-                errorMsg.textContent = 'Error de conexión. Intente nuevamente.';
+                errorMsg.textContent = 'No se pudo contactar al servidor de autenticación.';
                 errorMsg.classList.remove('hidden');
             }
         } finally {
