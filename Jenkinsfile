@@ -6,14 +6,19 @@ pipeline {
     }
 
     environment {
-        // Variables de configuración
         REGISTRY = "docker.io"
+        IMAGE_NAME = "tu-usuario/visitas-app"
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        DEPLOY_SERVER = "seguimiento.serviredgane.cloud"
+        DEPLOY_USER = "deploy"
+    }
 
-                        # Levantar contenedores con la configuración del compose
-                        docker compose down
-                        docker compose up -d --build
-                        DB_NAME="${DB_NAME}" \
-                        docker compose up -d --build
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '🔄 Clonando repositorio...'
+                dir('source') {
+                    checkout scm
                 }
             }
         }
@@ -23,12 +28,8 @@ pipeline {
                 echo '🏗️  Validando que la estructura esté lista...'
                 dir('source') {
                     sh '''
-                        # Verificar que package.json existe
                         test -f package.json || { echo "❌ package.json no encontrado"; exit 1; }
-                        
-                        # Verificar que Dockerfile existe
                         test -f Dockerfile || { echo "❌ Dockerfile no encontrado"; exit 1; }
-                        
                         echo "✅ Estructura validada, Docker manejará la compilación"
                     '''
                 }
@@ -40,8 +41,6 @@ pipeline {
                 echo '✅ Ejecutando pruebas...'
                 dir('source') {
                     sh '''
-                        # Aquí puedes añadir tus pruebas
-                        # npm run test
                         echo "Tests completados"
                     '''
                 }
@@ -76,7 +75,6 @@ pipeline {
                             -t ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
                             -t ${REGISTRY}/${IMAGE_NAME}:latest \
                             .
-                        
                         echo "✅ Imagen Docker construida exitosamente"
                         docker images | grep ${IMAGE_NAME}
                     '''
@@ -109,22 +107,15 @@ pipeline {
                 echo '🚀 Desplegando a producción...'
                 sh '''
                     ssh -i /var/lib/jenkins/.ssh/deploy_key \
-                        ${DEPLOY_USER}@${DEPLOY_SERVER} << EOF
+                        ${DEPLOY_USER}@${DEPLOY_SERVER} << 'EOF'
                     sudo sh -lc '
                         set -e
                         cd /opt/visitas-app
-
-                        # Asegurar que el compose del servidor está actualizado
                         git pull origin main
-
-                        # Levantar contenedores con la configuración del compose
                         docker compose down
                         docker compose up -d --build
-
-                        # Verificar salud
                         sleep 5
                         curl -f http://localhost:4322/api/supervisores || exit 1
-
                         echo "✅ Despliegue completado exitosamente"
                     '
 EOF
@@ -155,7 +146,6 @@ EOF
             steps {
                 echo '🧪 Ejecutando pruebas de humo...'
                 sh '''
-                    # Esperar a que la aplicación esté lista
                     for i in {1..30}; do
                         if curl -f http://${DEPLOY_SERVER}:4322/api/supervisores; then
                             echo "✅ Aplicación respondiendo"
@@ -164,8 +154,7 @@ EOF
                         echo "Intento $i/30 - esperando aplicación..."
                         sleep 2
                     done
-                    
-                    # Verificar endpoints clave
+
                     curl -f http://${DEPLOY_SERVER}:4322/ || exit 1
                     curl -f http://${DEPLOY_SERVER}:4322/api/visitas || exit 1
                 '''
@@ -176,12 +165,10 @@ EOF
     post {
         success {
             echo '✅ Pipeline completado exitosamente'
-            // Aquí puedes añadir notificaciones (Slack, email, etc.)
         }
 
         failure {
             echo '❌ Pipeline falló'
-            // Notificar del error
         }
 
         always {
