@@ -26,16 +26,37 @@ export const POST: APIRoute = async ({ request, cookies }) => {
             });
         }
 
-        // Query user from bdpersona.tbusuario
-        const sql = `
-            SELECT id, login, pass, nombre, perfil, activo 
-            FROM bdpersona.tbusuario 
-                        WHERE UPPER(TRIM(login)) = UPPER(TRIM(?))
-                            AND TRIM(pass) = TRIM(?)
-                            AND activo != 0
-        `;
+        const userTableCandidates = [
+            'bdpersona.tbusuario',
+            'tbusuario'
+        ];
 
-        const users = await query<Usuario>(sql, [login, password]);
+        let users: Usuario[] = [];
+        let lastError: unknown = null;
+
+        for (const userTable of userTableCandidates) {
+            const sql = `
+                SELECT id, login, pass, nombre, perfil, activo
+                FROM ${userTable}
+                WHERE UPPER(TRIM(login)) = UPPER(TRIM(?))
+                  AND TRIM(pass) = TRIM(?)
+                  AND activo != 0
+            `;
+
+            try {
+                users = await query<Usuario>(sql, [login, password]);
+
+                if (users.length > 0) {
+                    break;
+                }
+            } catch (error) {
+                lastError = error;
+            }
+        }
+
+        if (users.length === 0 && lastError) {
+            throw lastError;
+        }
 
         if (users.length === 0) {
             return new Response(JSON.stringify({
@@ -77,10 +98,20 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     } catch (error) {
         console.error('Login error:', error);
+
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        const lowerMessage = message.toLowerCase();
+        const isEnvError = lowerMessage.includes('missing required environment variable');
+        const isDbConnectionError = lowerMessage.includes('connect') || lowerMessage.includes('access denied') || lowerMessage.includes('unknown database');
+
         return new Response(JSON.stringify({
             success: false,
-            error: 'Error al iniciar sesión',
-            details: error instanceof Error ? error.message : 'Unknown error'
+            error: isEnvError
+                ? 'Faltan variables de base de datos en el servidor'
+                : isDbConnectionError
+                    ? 'No se pudo conectar a la base de datos'
+                    : 'Error al iniciar sesión',
+            details: message
         }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' }
