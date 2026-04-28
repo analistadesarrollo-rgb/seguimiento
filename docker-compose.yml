@@ -1,6 +1,8 @@
 services:
   app:
-    image: ${REGISTRY}/${IMAGE_NAME}:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: visitas-app
     ports:
       - "4322:80"

@@ -124,22 +124,19 @@ pipeline {
                             ${DEPLOY_USER}@${DEPLOY_SERVER} << EOF
                         cd /opt/visitas-app
 
-                        export DB_HOST="$DB_HOST"
-                        export DB_USER="$DB_USER"
-                        export DB_PASS="$DB_PASS"
-                        export DB_NAME="$DB_NAME"
-                        export REGISTRY="${REGISTRY}"
-                        export IMAGE_NAME="${IMAGE_NAME}"
-
                         # Asegurar que el compose del servidor está actualizado
                         git pull origin main
 
-                        # Detener contenedores actuales
-                        sudo docker compose down
-                        
-                        # Descargar y levantar la imagen publicada por Jenkins
-                        sudo docker compose pull
-                        sudo docker compose up -d
+                        # Detener y reconstruir contenedores con variables explícitas
+                        sudo sh -lc '
+                            cd /opt/visitas-app &&
+                            export DB_HOST="'"$DB_HOST"'" &&
+                            export DB_USER="'"$DB_USER"'" &&
+                            export DB_PASS="'"$DB_PASS"'" &&
+                            export DB_NAME="'"$DB_NAME"'" &&
+                            docker compose down &&
+                            docker compose up -d --build
+                        '
                         
                         # Verificar salud
                         sleep 5
