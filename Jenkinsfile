@@ -113,22 +113,18 @@ pipeline {
                 ]) {
                     sh '''
                         ssh -i /var/lib/jenkins/.ssh/deploy_key \
-                            ${DEPLOY_USER}@${DEPLOY_SERVER} << EOF
-                        sudo sh -lc '
-                            set -e
-                            cd /opt/visitas-app
-                            git pull origin main
-                            export DB_HOST="${DB_HOST}"
-                            export DB_USER="${DB_USER}"
-                            export DB_PASS="${DB_PASS}"
-                            export DB_NAME="${DB_NAME}"
-                            docker compose down
-                            docker compose up -d --build
-                            sleep 5
-                            curl -f http://localhost:4322/api/supervisores || exit 1
-                            echo "✅ Despliegue completado exitosamente"
-                        '
-EOF
+                            ${DEPLOY_USER}@${DEPLOY_SERVER} \
+                            "cd /opt/visitas-app && \
+                             git pull origin main && \
+                             export DB_HOST='${DB_HOST}' && \
+                             export DB_USER='${DB_USER}' && \
+                             export DB_PASS='${DB_PASS}' && \
+                             export DB_NAME='${DB_NAME}' && \
+                             sudo -E docker compose down && \
+                             sudo -E docker compose up -d --build && \
+                             sleep 5 && \
+                             curl -f http://localhost:4322/api/supervisores || exit 1 && \
+                             echo '✅ Despliegue completado exitosamente'"
                     '''
                 }
             }
