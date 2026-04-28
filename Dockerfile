@@ -23,9 +23,6 @@ WORKDIR /app
 ENV HOST=0.0.0.0
 ENV PORT=4322
 
-# Instalar solo dependencias de producción
-RUN npm install -g pm2
-
 COPY package.json package-lock.json ./
 RUN npm ci --only=production
 
@@ -43,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:4322', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
 # Comando de inicio
-CMD ["pm2-runtime", "start", "dist/entry.mjs", "--name", "visitas-app"]
+CMD ["node", "dist/server/entry.mjs"]
