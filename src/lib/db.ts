@@ -1,13 +1,38 @@
 import mysql from 'mysql2/promise';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const requiredEnv = (key: string) => {
-    const value = process.env[key];
+    const value = process.env[key] || getEnvFromFile(key);
 
     if (!value) {
         throw new Error(`Missing required environment variable: ${key}`);
     }
 
     return value;
+};
+
+const getEnvFromFile = (key: string) => {
+    const candidateFiles = [path.join(process.cwd(), '.env'), '/app/.env'];
+
+    for (const filePath of candidateFiles) {
+        try {
+            if (!fs.existsSync(filePath)) {
+                continue;
+            }
+
+            const content = fs.readFileSync(filePath, 'utf8');
+            const match = content.match(new RegExp(`^${key}=(.*)$`, 'm'));
+
+            if (match?.[1]) {
+                return match[1].trim().replace(/^['"]|['"]$/g, '');
+            }
+        } catch {
+            continue;
+        }
+    }
+
+    return null;
 };
 
 let pool: mysql.Pool | null = null;

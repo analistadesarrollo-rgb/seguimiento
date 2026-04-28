@@ -13,6 +13,7 @@ services:
       PORT: 80
       HOST: 0.0.0.0
     volumes:
+      - ./.env:/app/.env:ro
       - ./storage:/app/storage
     restart: unless-stopped
     networks:
