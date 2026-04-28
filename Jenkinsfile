@@ -23,8 +23,11 @@ pipeline {
             steps {
                 echo '🏗️  Construyendo aplicación...'
                 sh '''
-                    npm ci
-                    npm run build
+                    docker run --rm \
+                        -v "$PWD":/app \
+                        -w /app \
+                        node:18-alpine \
+                        sh -lc "npm ci && npm run build"
                 '''
             }
         }
