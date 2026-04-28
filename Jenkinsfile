@@ -99,6 +99,33 @@ pipeline {
             }
         }
 
+        stage('Prepare SSH') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo '🔑 Preparando clave SSH...'
+                sh '''
+                    JENKINS_SSH_KEY="/var/lib/jenkins/.ssh/deploy_key"
+                    JENKINS_SSH_PUB="${JENKINS_SSH_KEY}.pub"
+                    
+                    # Generar clave SSH si no existe
+                    if [ ! -f "${JENKINS_SSH_KEY}" ]; then
+                        echo "[ssh] Generando clave SSH"
+                        mkdir -p /var/lib/jenkins/.ssh
+                        ssh-keygen -t rsa -b 4096 -f "${JENKINS_SSH_KEY}" -N "" || true
+                        chmod 600 "${JENKINS_SSH_KEY}"
+                    else
+                        echo "[ssh] Clave SSH ya existe"
+                    fi
+                    
+                    # Mostrar clave pública
+                    echo "[ssh] Clave pública (para referencia):"
+                    cat "${JENKINS_SSH_PUB}"
+                '''
+            }
+        }
+
         stage('Deploy to Production') {
             when {
                 branch 'main'
@@ -108,12 +135,33 @@ pipeline {
                 dir('source') {
                     sh '''
                         HOST=${DEPLOY_USER}@${DEPLOY_SERVER}
+                        SSH_KEY="/var/lib/jenkins/.ssh/deploy_key"
+                        SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${SSH_KEY}"
+                        
+                        # Intentar conexión SSH
+                        echo "[deploy] Verificando conectividad SSH..."
+                        if ! ssh ${SSH_OPTS} ${HOST} "echo OK" &>/dev/null; then
+                            echo "[ERROR] No se puede conectar por SSH a ${HOST}"
+                            echo "[ERROR] Ejecuta ESTO en el servidor ${DEPLOY_SERVER}:"
+                            echo ""
+                            echo "════════════════════════════════════════════════════════════"
+                            echo "sudo tee -a /home/deploy/.ssh/authorized_keys > /dev/null <<'KEY'"
+                            cat ${SSH_KEY}.pub
+                            echo "KEY"
+                            echo "sudo chown -R deploy:deploy /home/deploy/.ssh"
+                            echo "sudo chmod 700 /home/deploy/.ssh"
+                            echo "sudo chmod 600 /home/deploy/.ssh/authorized_keys"
+                            echo "════════════════════════════════════════════════════════════"
+                            echo ""
+                            echo "Después vuelve a ejecutar Build en Jenkins"
+                            exit 1
+                        fi
                         
                         echo "[1/2] Setting up server (first time only, idempotent)..."
-                        ssh -o StrictHostKeyChecking=no ${HOST} "sudo bash -s" < scripts/setup-remote.sh || true
+                        ssh ${SSH_OPTS} ${HOST} "sudo bash -s" < scripts/setup-remote.sh || true
                         
                         echo "[2/2] Pulling latest code and deploying..."
-                        ssh -o StrictHostKeyChecking=no ${HOST} "cd /opt/visitas-app && git pull origin main && sudo /opt/visitas-app/scripts/deploy.sh"
+                        ssh ${SSH_OPTS} ${HOST} "cd /opt/visitas-app && git pull origin main && sudo /opt/visitas-app/scripts/deploy.sh"
                         
                         echo '✅ Despliegue completado exitosamente'
                     '''
