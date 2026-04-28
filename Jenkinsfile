@@ -105,21 +105,32 @@ pipeline {
             }
             steps {
                 echo '🚀 Desplegando a producción...'
-                sh '''
-                    ssh -i /var/lib/jenkins/.ssh/deploy_key \
-                        ${DEPLOY_USER}@${DEPLOY_SERVER} << 'EOF'
-                    sudo sh -lc '
-                        set -e
-                        cd /opt/visitas-app
-                        git pull origin main
-                        docker compose down
-                        docker compose up -d --build
-                        sleep 5
-                        curl -f http://localhost:4322/api/supervisores || exit 1
-                        echo "✅ Despliegue completado exitosamente"
-                    '
+                withCredentials([
+                    string(credentialsId: 'db-host', variable: 'DB_HOST'),
+                    string(credentialsId: 'db-user', variable: 'DB_USER'),
+                    string(credentialsId: 'db-pass', variable: 'DB_PASS'),
+                    string(credentialsId: 'db-name', variable: 'DB_NAME')
+                ]) {
+                    sh '''
+                        ssh -i /var/lib/jenkins/.ssh/deploy_key \
+                            ${DEPLOY_USER}@${DEPLOY_SERVER} << EOF
+                        sudo sh -lc '
+                            set -e
+                            cd /opt/visitas-app
+                            git pull origin main
+                            export DB_HOST="${DB_HOST}"
+                            export DB_USER="${DB_USER}"
+                            export DB_PASS="${DB_PASS}"
+                            export DB_NAME="${DB_NAME}"
+                            docker compose down
+                            docker compose up -d --build
+                            sleep 5
+                            curl -f http://localhost:4322/api/supervisores || exit 1
+                            echo "✅ Despliegue completado exitosamente"
+                        '
 EOF
-                '''
+                    '''
+                }
             }
         }
 
