@@ -20,6 +20,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+ENV HOST=0.0.0.0
+ENV PORT=4322
+
 # Instalar solo dependencias de producción
 RUN npm install -g pm2
 
