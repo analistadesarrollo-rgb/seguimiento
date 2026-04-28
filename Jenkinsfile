@@ -104,9 +104,9 @@ pipeline {
                 branch 'main'
             }
             steps {
-                echo '🚀 Desplegando a producción...'
-                // Support either: A) a single secret containing the full .env (VISITAS_ENV_FILE)
-                // or B) four separate secrets (db-host, db-user, db-pass, db-name).
+                echo '🚀 Desplegando a producción (ssh-agent + VISITAS_ENV_FILE)...'
+                // Uses an SSH credential in Jenkins (id: 'deploy-ssh') and a secret 'VISITAS_ENV_FILE'
+                // Fallback: four separate DB secrets (db-host, db-user, db-pass, db-name)
                 withCredentials([
                     string(credentialsId: 'VISITAS_ENV_FILE', variable: 'VISITAS_ENV'),
                     string(credentialsId: 'db-host', variable: 'DB_HOST'),
@@ -114,14 +114,31 @@ pipeline {
                     string(credentialsId: 'db-pass', variable: 'DB_PASS'),
                     string(credentialsId: 'db-name', variable: 'DB_NAME')
                 ]) {
-                    sh '''
-                        if [ -n "${VISITAS_ENV}" ]; then
-                          VIS_B64=$(printf '%s' "${VISITAS_ENV}" | base64 -w0)
-                          ssh -i /var/lib/jenkins/.ssh/deploy_key ${DEPLOY_USER}@${DEPLOY_SERVER} "printf '%s' ${VIS_B64} | base64 -d > /tmp/visitas.env && sudo mv /tmp/visitas.env /opt/visitas-app/.env && sudo chown root:root /opt/visitas-app/.env && cd /opt/visitas-app && git pull origin main && sudo docker compose down && sudo docker compose up -d --build && sleep 5 && curl -f http://localhost:4322/api/supervisores || exit 1 && echo '✅ Despliegue completado exitosamente'"
-                        else
-                          ssh -i /var/lib/jenkins/.ssh/deploy_key ${DEPLOY_USER}@${DEPLOY_SERVER} "cd /opt/visitas-app && git pull origin main && export DB_HOST='${DB_HOST}' && export DB_USER='${DB_USER}' && export DB_PASS='${DB_PASS}' && export DB_NAME='${DB_NAME}' && sudo -E docker compose down && sudo -E docker compose up -d --build && sleep 5 && curl -f http://localhost:4322/api/supervisores || exit 1 && echo '✅ Despliegue completado exitosamente'"
-                        fi
-                    '''
+                    // 'deploy-ssh' must be an SSH credential (private key) stored in Jenkins
+                    sshagent (credentials: ['deploy-ssh']) {
+                        sh '''
+                            set -euo pipefail
+                            HOST=${DEPLOY_USER}@${DEPLOY_SERVER}
+
+                            if [ -n "${VISITAS_ENV}" ]; then
+                              echo "[deploy] Writing .env to remote host"
+                              B64=$(printf '%s' "${VISITAS_ENV}" | base64 -w0)
+                              ssh -o StrictHostKeyChecking=no ${HOST} "printf '%s' ${B64} | base64 -d > /tmp/visitas.env && sudo mv /tmp/visitas.env /opt/visitas-app/.env && sudo chown root:root /opt/visitas-app/.env && sudo chmod 600 /opt/visitas-app/.env"
+                            fi
+
+                            echo "[deploy] Pulling latest and restarting compose on remote"
+                            if [ -n "${VISITAS_ENV}" ]; then
+                              ssh -o StrictHostKeyChecking=no ${HOST} "cd /opt/visitas-app && git pull origin main && sudo docker compose down && sudo docker compose up -d --build"
+                            else
+                              # Fallback: export DB_* in remote shell for this session
+                              ssh -o StrictHostKeyChecking=no ${HOST} "export DB_HOST='${DB_HOST}' DB_USER='${DB_USER}' DB_PASS='${DB_PASS}' DB_NAME='${DB_NAME}' && cd /opt/visitas-app && git pull origin main && sudo -E docker compose down && sudo -E docker compose up -d --build"
+                            fi
+
+                            echo "[deploy] Waiting 5s and checking health"
+                            ssh -o StrictHostKeyChecking=no ${HOST} "sleep 5 && curl -f http://localhost:4322/api/supervisores"
+                            echo '✅ Despliegue completado exitosamente'
+                        '''
+                    }
                 }
             }
         }
