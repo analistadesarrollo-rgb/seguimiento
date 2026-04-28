@@ -104,44 +104,13 @@ pipeline {
                 branch 'main'
             }
             steps {
-                echo '🚀 Desplegando a producción (ssh-agent + VISITAS_ENV_FILE)...'
-                // Uses an SSH credential in Jenkins (id: 'deploy-ssh') and a secret 'VISITAS_ENV_FILE'
-                // Fallback: four separate DB secrets (db-host, db-user, db-pass, db-name)
-                withCredentials([
-                    string(credentialsId: 'VISITAS_ENV_FILE', variable: 'VISITAS_ENV'),
-                    string(credentialsId: 'db-host', variable: 'DB_HOST'),
-                    string(credentialsId: 'db-user', variable: 'DB_USER'),
-                    string(credentialsId: 'db-pass', variable: 'DB_PASS'),
-                    string(credentialsId: 'db-name', variable: 'DB_NAME')
-                ]) {
-                    // 'deploy-ssh' must be an SSH credential (private key) stored in Jenkins
-                    sshagent (credentials: ['deploy-ssh']) {
-                        sh '''
-                            set -euo pipefail
-                            HOST=${DEPLOY_USER}@${DEPLOY_SERVER}
-
-                                                        if [ -n "${VISITAS_ENV}" ]; then
-                                                            echo "[deploy] Writing .env to remote host"
-                                                            B64=$(printf '%s' "${VISITAS_ENV}" | base64 -w0)
-                                                            ssh -o StrictHostKeyChecking=no ${HOST} "printf '%s' ${B64} | base64 -d > /tmp/visitas.env && sudo mv /tmp/visitas.env /opt/visitas-app/.env && sudo chown root:root /opt/visitas-app/.env && sudo chmod 600 /opt/visitas-app/.env"
-                                                        else
-                                                            echo "[deploy] Creating .env from DB_* variables"
-                                                            B64=$(printf 'DB_HOST=%s\nDB_USER=%s\nDB_PASS=%s\nDB_NAME=%s\n' "${DB_HOST}" "${DB_USER}" "${DB_PASS}" "${DB_NAME}" | base64 -w0)
-                                                            ssh -o StrictHostKeyChecking=no ${HOST} "printf '%s' ${B64} | base64 -d > /tmp/visitas.env && sudo mv /tmp/visitas.env /opt/visitas-app/.env && sudo chown root:root /opt/visitas-app/.env && sudo chmod 600 /opt/visitas-app/.env"
-                                                        fi
-
-                                                        echo "[deploy] Pulling latest and calling remote deploy script"
-                                                        ssh -o StrictHostKeyChecking=no ${HOST} "cd /opt/visitas-app && git pull origin main && sudo /opt/visitas-app/scripts/deploy.sh"
-
-                                                        echo '✅ Despliegue completado exitosamente'
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Update Cloudflare DNS') {
-            when {
+                echo '🚀 Desplegando a producción...'
+                sh '''
+                    HOST=${DEPLOY_USER}@${DEPLOY_SERVER}
+                    echo "[deploy] Pulling latest code and running deploy script on ${HOST}"
+                    ssh -o StrictHostKeyChecking=no ${HOST} "cd /opt/visitas-app && git pull origin main && sudo /opt/visitas-app/scripts/deploy.sh"
+                    echo '✅ Despliegue completado exitosamente'
+                '''
                 branch 'main'
             }
             steps {
