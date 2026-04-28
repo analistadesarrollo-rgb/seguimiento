@@ -25,7 +25,7 @@ else
   echo "[setup-remote] repository already cloned, skipping"
 fi
 
-# 3. Asegurar que existe .env (si no, crear plantilla)
+# 3. Asegurar que existe .env (si no, crear con valores correctos)
 if [ ! -f "${APP_DIR}/.env" ]; then
   echo "[setup-remote] creating .env file"
   sudo tee "${APP_DIR}/.env" > /dev/null <<'EOF'

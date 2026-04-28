@@ -5,18 +5,19 @@ APP_DIR=/opt/visitas-app
 
 echo "[deploy-script] running in ${APP_DIR}"
 
-if [ -f "${APP_DIR}/.env" ]; then
-  echo "[deploy-script] .env found, fixing permissions"
-  sudo chown root:root "${APP_DIR}/.env" || true
-  sudo chmod 600 "${APP_DIR}/.env" || true
-else
-  echo "[deploy-script] .env not present, proceeding (ensure DB_* are set if needed)"
-fi
+# Asegurar que .env existe y tiene los valores correctos
+echo "[deploy-script] ensuring .env is configured"
+sudo tee ${APP_DIR}/.env > /dev/null <<'EOF'
+DB_HOST=172.20.1.92
+DB_USER=cliente
+DB_PASS=adminadmon
+DB_NAME=appseguimiento
+EOF
 
-cd "${APP_DIR}"
+sudo chown root:root ${APP_DIR}/.env
+sudo chmod 600 ${APP_DIR}/.env
 
-echo "[deploy-script] pulling latest code"
-git pull origin main || true
+cd ${APP_DIR}
 
 echo "[deploy-script] stopping compose"
 sudo docker compose down || true
