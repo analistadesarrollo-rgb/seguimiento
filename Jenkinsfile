@@ -120,23 +120,20 @@ pipeline {
                             set -euo pipefail
                             HOST=${DEPLOY_USER}@${DEPLOY_SERVER}
 
-                            if [ -n "${VISITAS_ENV}" ]; then
-                              echo "[deploy] Writing .env to remote host"
-                              B64=$(printf '%s' "${VISITAS_ENV}" | base64 -w0)
-                              ssh -o StrictHostKeyChecking=no ${HOST} "printf '%s' ${B64} | base64 -d > /tmp/visitas.env && sudo mv /tmp/visitas.env /opt/visitas-app/.env && sudo chown root:root /opt/visitas-app/.env && sudo chmod 600 /opt/visitas-app/.env"
-                            fi
+                                                        if [ -n "${VISITAS_ENV}" ]; then
+                                                            echo "[deploy] Writing .env to remote host"
+                                                            B64=$(printf '%s' "${VISITAS_ENV}" | base64 -w0)
+                                                            ssh -o StrictHostKeyChecking=no ${HOST} "printf '%s' ${B64} | base64 -d > /tmp/visitas.env && sudo mv /tmp/visitas.env /opt/visitas-app/.env && sudo chown root:root /opt/visitas-app/.env && sudo chmod 600 /opt/visitas-app/.env"
+                                                        else
+                                                            echo "[deploy] Creating .env from DB_* variables"
+                                                            B64=$(printf 'DB_HOST=%s\nDB_USER=%s\nDB_PASS=%s\nDB_NAME=%s\n' "${DB_HOST}" "${DB_USER}" "${DB_PASS}" "${DB_NAME}" | base64 -w0)
+                                                            ssh -o StrictHostKeyChecking=no ${HOST} "printf '%s' ${B64} | base64 -d > /tmp/visitas.env && sudo mv /tmp/visitas.env /opt/visitas-app/.env && sudo chown root:root /opt/visitas-app/.env && sudo chmod 600 /opt/visitas-app/.env"
+                                                        fi
 
-                            echo "[deploy] Pulling latest and restarting compose on remote"
-                            if [ -n "${VISITAS_ENV}" ]; then
-                              ssh -o StrictHostKeyChecking=no ${HOST} "cd /opt/visitas-app && git pull origin main && sudo docker compose down && sudo docker compose up -d --build"
-                            else
-                              # Fallback: export DB_* in remote shell for this session
-                              ssh -o StrictHostKeyChecking=no ${HOST} "export DB_HOST='${DB_HOST}' DB_USER='${DB_USER}' DB_PASS='${DB_PASS}' DB_NAME='${DB_NAME}' && cd /opt/visitas-app && git pull origin main && sudo -E docker compose down && sudo -E docker compose up -d --build"
-                            fi
+                                                        echo "[deploy] Pulling latest and calling remote deploy script"
+                                                        ssh -o StrictHostKeyChecking=no ${HOST} "cd /opt/visitas-app && git pull origin main && sudo /opt/visitas-app/scripts/deploy.sh"
 
-                            echo "[deploy] Waiting 5s and checking health"
-                            ssh -o StrictHostKeyChecking=no ${HOST} "sleep 5 && curl -f http://localhost:4322/api/supervisores"
-                            echo '✅ Despliegue completado exitosamente'
+                                                        echo '✅ Despliegue completado exitosamente'
                         '''
                     }
                 }
