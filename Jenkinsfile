@@ -44,7 +44,7 @@ pipeline {
                                 find . -mindepth 1 -maxdepth 1 \
                                     ! -name node_modules \
                                     ! -name dist \
-                                    -exec cp -a {} /tmp/build/ \;
+                                    -exec cp -a {} /tmp/build/ +
                                 cd /tmp/build
                                 npm ci --cache /tmp/.npm
                                 npm run build
