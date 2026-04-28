@@ -13,6 +13,10 @@ pipeline {
         GIT_REPO = "https://github.com/tu-usuario/visitas_maps.git"
         DEPLOY_SERVER = "seguimiento.serviredgane.cloud"
         DEPLOY_USER = "deploy"
+        DB_HOST = "172.20.1.92"
+        DB_USER = "cliente"
+        DB_PASS = "adminadmon"
+        DB_NAME = "appseguimiento"
     }
 
     stages {
@@ -114,43 +118,38 @@ pipeline {
             }
             steps {
                 echo '🚀 Desplegando a producción...'
-                withCredentials([file(credentialsId: 'visitas-env-file', variable: 'VISITAS_ENV_FILE')]) {
-                    sh '''
-                        set -a
-                        . "$VISITAS_ENV_FILE"
-                        set +a
+                sh '''
+                    ssh -i /var/lib/jenkins/.ssh/deploy_key \
+                        ${DEPLOY_USER}@${DEPLOY_SERVER} << EOF
+                    sudo sh -lc '
+                        set -e
+                        cd /opt/visitas-app
 
-                        ssh -i /var/lib/jenkins/.ssh/deploy_key \
-                            ${DEPLOY_USER}@${DEPLOY_SERVER} << EOF
-                        sudo sh -lc '
-                            set -e
-                            cd /opt/visitas-app
+                        # Asegurar que el compose del servidor está actualizado
+                        git pull origin main
 
-                            # Asegurar que el compose del servidor está actualizado
-                            git pull origin main
-
-                            # Persistir credenciales de BD para docker compose
-                            install -m 600 /dev/null /opt/visitas-app/.env
-                            cat > /opt/visitas-app/.env <<EOF_INNER
+                        # Persistir credenciales de BD para docker compose
+                        cat > /opt/visitas-app/.env <<EOF_INNER
 DB_HOST=${DB_HOST}
 DB_USER=${DB_USER}
 DB_PASS=${DB_PASS}
 DB_NAME=${DB_NAME}
 EOF_INNER
 
-                            # Levantar contenedores con el .env recién creado
-                            docker compose down
-                            docker compose up -d --build
+                        chmod 600 /opt/visitas-app/.env
 
-                            # Verificar salud
-                            sleep 5
-                            curl -f http://localhost:4322/api/supervisores || exit 1
+                        # Levantar contenedores con el .env recién creado
+                        docker compose down
+                        docker compose up -d --build
 
-                            echo "✅ Despliegue completado exitosamente"
-                        '
+                        # Verificar salud
+                        sleep 5
+                        curl -f http://localhost:4322/api/supervisores || exit 1
+
+                        echo "✅ Despliegue completado exitosamente"
+                    '
 EOF
-                    '''
-                }
+                '''
             }
         }
 
