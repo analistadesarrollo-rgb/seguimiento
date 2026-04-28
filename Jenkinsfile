@@ -122,31 +122,31 @@ pipeline {
 
                         ssh -i /var/lib/jenkins/.ssh/deploy_key \
                             ${DEPLOY_USER}@${DEPLOY_SERVER} << EOF
-                        cd /opt/visitas-app
-
-                        # Asegurar que el compose del servidor está actualizado
-                        git pull origin main
-
-                        # Persistir credenciales de BD para docker compose
-                        cat <<ENVEOF | sudo tee /opt/visitas-app/.env > /dev/null
-DB_HOST=$DB_HOST
-DB_USER=$DB_USER
-DB_PASS=$DB_PASS
-DB_NAME=$DB_NAME
-ENVEOF
-
-                        # Detener y reconstruir contenedores con variables explícitas
                         sudo sh -lc '
-                            cd /opt/visitas-app &&
-                            docker compose down &&
+                            set -e
+                            cd /opt/visitas-app
+
+                            # Asegurar que el compose del servidor está actualizado
+                            git pull origin main
+
+                            # Persistir credenciales de BD para docker compose
+                            cat > .env <<EOF_INNER
+DB_HOST=${DB_HOST}
+DB_USER=${DB_USER}
+DB_PASS=${DB_PASS}
+DB_NAME=${DB_NAME}
+EOF_INNER
+
+                            # Levantar contenedores con el .env recién creado
+                            docker compose down
                             docker compose up -d --build
+
+                            # Verificar salud
+                            sleep 5
+                            curl -f http://localhost:4322/api/supervisores || exit 1
+
+                            echo "✅ Despliegue completado exitosamente"
                         '
-                        
-                        # Verificar salud
-                        sleep 5
-                        curl -f http://localhost:4322/api/supervisores || exit 1
-                        
-                        echo "✅ Despliegue completado exitosamente"
 EOF
                     '''
                 }
