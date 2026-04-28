@@ -104,13 +104,25 @@ pipeline {
                 branch 'main'
             }
             steps {
-                echo '🚀 Desplegando a producción...'
-                sh '''
-                    HOST=${DEPLOY_USER}@${DEPLOY_SERVER}
-                    echo "[deploy] Pulling latest code and running deploy script on ${HOST}"
-                    ssh -o StrictHostKeyChecking=no ${HOST} "cd /opt/visitas-app && git pull origin main && sudo /opt/visitas-app/scripts/deploy.sh"
-                    echo '✅ Despliegue completado exitosamente'
-                '''
+                echo '🚀 Desplegando a producción (setup + deploy)...'
+                dir('source') {
+                    sh '''
+                        HOST=${DEPLOY_USER}@${DEPLOY_SERVER}
+                        
+                        echo "[1/2] Setting up server (first time only, idempotent)..."
+                        ssh -o StrictHostKeyChecking=no ${HOST} "sudo bash -s" < scripts/setup-remote.sh || true
+                        
+                        echo "[2/2] Pulling latest code and deploying..."
+                        ssh -o StrictHostKeyChecking=no ${HOST} "cd /opt/visitas-app && git pull origin main && sudo /opt/visitas-app/scripts/deploy.sh"
+                        
+                        echo '✅ Despliegue completado exitosamente'
+                    '''
+                }
+            }
+        }
+
+        stage('Update Cloudflare DNS') {
+            when {
                 branch 'main'
             }
             steps {
