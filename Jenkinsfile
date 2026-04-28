@@ -105,26 +105,22 @@ pipeline {
             }
             steps {
                 echo '🚀 Desplegando a producción...'
+                // Support either: A) a single secret containing the full .env (VISITAS_ENV_FILE)
+                // or B) four separate secrets (db-host, db-user, db-pass, db-name).
                 withCredentials([
+                    string(credentialsId: 'VISITAS_ENV_FILE', variable: 'VISITAS_ENV'),
                     string(credentialsId: 'db-host', variable: 'DB_HOST'),
                     string(credentialsId: 'db-user', variable: 'DB_USER'),
                     string(credentialsId: 'db-pass', variable: 'DB_PASS'),
                     string(credentialsId: 'db-name', variable: 'DB_NAME')
                 ]) {
                     sh '''
-                        ssh -i /var/lib/jenkins/.ssh/deploy_key \
-                            ${DEPLOY_USER}@${DEPLOY_SERVER} \
-                            "cd /opt/visitas-app && \
-                             git pull origin main && \
-                             export DB_HOST='${DB_HOST}' && \
-                             export DB_USER='${DB_USER}' && \
-                             export DB_PASS='${DB_PASS}' && \
-                             export DB_NAME='${DB_NAME}' && \
-                             sudo -E docker compose down && \
-                             sudo -E docker compose up -d --build && \
-                             sleep 5 && \
-                             curl -f http://localhost:4322/api/supervisores || exit 1 && \
-                             echo '✅ Despliegue completado exitosamente'"
+                        if [ -n "${VISITAS_ENV}" ]; then
+                          VIS_B64=$(printf '%s' "${VISITAS_ENV}" | base64 -w0)
+                          ssh -i /var/lib/jenkins/.ssh/deploy_key ${DEPLOY_USER}@${DEPLOY_SERVER} "printf '%s' ${VIS_B64} | base64 -d > /tmp/visitas.env && sudo mv /tmp/visitas.env /opt/visitas-app/.env && sudo chown root:root /opt/visitas-app/.env && cd /opt/visitas-app && git pull origin main && sudo docker compose down && sudo docker compose up -d --build && sleep 5 && curl -f http://localhost:4322/api/supervisores || exit 1 && echo '✅ Despliegue completado exitosamente'"
+                        else
+                          ssh -i /var/lib/jenkins/.ssh/deploy_key ${DEPLOY_USER}@${DEPLOY_SERVER} "cd /opt/visitas-app && git pull origin main && export DB_HOST='${DB_HOST}' && export DB_USER='${DB_USER}' && export DB_PASS='${DB_PASS}' && export DB_NAME='${DB_NAME}' && sudo -E docker compose down && sudo -E docker compose up -d --build && sleep 5 && curl -f http://localhost:4322/api/supervisores || exit 1 && echo '✅ Despliegue completado exitosamente'"
+                        fi
                     '''
                 }
             }
