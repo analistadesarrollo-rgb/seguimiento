@@ -130,7 +130,8 @@ pipeline {
                             git pull origin main
 
                             # Persistir credenciales de BD para docker compose
-                            cat > .env <<EOF_INNER
+                            install -m 600 /dev/null /opt/visitas-app/.env
+                            cat > /opt/visitas-app/.env <<EOF_INNER
 DB_HOST=${DB_HOST}
 DB_USER=${DB_USER}
 DB_PASS=${DB_PASS}
