@@ -29,6 +29,9 @@ RUN npm ci --only=production
 # Copiar dist del builder
 COPY --from=builder /app/dist ./dist
 
+# Copiar variables de entorno
+COPY .env ./.env
+
 # Copiar directorio storage para permisos
 COPY storage ./storage
 

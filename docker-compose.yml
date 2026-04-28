@@ -6,14 +6,12 @@ services:
     container_name: visitas-app
     ports:
       - "4322:80"
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
       PORT: 80
       HOST: 0.0.0.0
-      DB_HOST: 172.20.1.92
-      DB_USER: cliente
-      DB_PASS: adminadmon
-      DB_NAME: appseguimiento
     volumes:
       - ./storage:/app/storage
     restart: unless-stopped
