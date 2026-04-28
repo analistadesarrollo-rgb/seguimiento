@@ -9,10 +9,10 @@ services:
     env_file:
       - .env
     ports:
-      - "4322:4322"
+      - "4322:80"
     environment:
       - NODE_ENV=production
-      - PORT=4322
+      - PORT=80
       - HOST=0.0.0.0
     volumes:
       - ./storage:/app/storage
@@ -20,7 +20,7 @@ services:
     networks:
       - red-gane-int
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4322"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
       interval: 30s
       timeout: 10s
       retries: 3
