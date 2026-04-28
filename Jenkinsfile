@@ -90,31 +90,44 @@ pipeline {
             }
             steps {
                 echo '🚀 Desplegando a producción...'
-                sh '''
-                    ssh -i /var/lib/jenkins/.ssh/deploy_key \
-                        ${DEPLOY_USER}@${DEPLOY_SERVER} << 'EOF'
+                withCredentials([file(credentialsId: 'visitas-env-file', variable: 'VISITAS_ENV_FILE')]) {
+                    sh '''
+                        set -a
+                        . "$VISITAS_ENV_FILE"
+                        set +a
+
+                        ssh -i /var/lib/jenkins/.ssh/deploy_key \
+                            ${DEPLOY_USER}@${DEPLOY_SERVER} << EOF
+                            
+                        cd /opt/visitas-app
+
+                        cat > .env <<ENVEOF
+DB_HOST=$DB_HOST
+DB_USER=$DB_USER
+DB_PASS=$DB_PASS
+DB_NAME=$DB_NAME
+ENVEOF
                         
-                    cd /opt/visitas-app
-                    
-                    # Pull última versión
-                    git pull origin main
-                    
-                    # Pull imagen Docker
-                    docker pull ${REGISTRY}/${IMAGE_NAME}:latest
-                    
-                    # Detener contenedores actuales
-                    docker-compose down
-                    
-                    # Iniciar nuevos contenedores
-                    docker-compose up -d
-                    
-                    # Verificar salud
-                    sleep 5
-                    curl -f http://localhost:4322/api/supervisores || exit 1
-                    
-                    echo "✅ Despliegue completado exitosamente"
+                        # Pull última versión
+                        git pull origin main
+                        
+                        # Pull imagen Docker
+                        docker pull ${REGISTRY}/${IMAGE_NAME}:latest
+                        
+                        # Detener contenedores actuales
+                        docker-compose down
+                        
+                        # Iniciar nuevos contenedores
+                        docker-compose up -d
+                        
+                        # Verificar salud
+                        sleep 5
+                        curl -f http://localhost:4322/api/supervisores || exit 1
+                        
+                        echo "✅ Despliegue completado exitosamente"
 EOF
-                '''
+                    '''
+                }
             }
         }
 

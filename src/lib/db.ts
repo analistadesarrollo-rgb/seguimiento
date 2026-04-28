@@ -1,11 +1,21 @@
 import mysql from 'mysql2/promise';
 
+const requiredEnv = (key: string) => {
+    const value = process.env[key];
+
+    if (!value) {
+        throw new Error(`Missing required environment variable: ${key}`);
+    }
+
+    return value;
+};
+
 // Database configuration
 const dbConfig = {
-    host: '172.20.1.92',
-    user: 'cliente',
-    password: 'adminadmon',
-    database: 'appseguimiento',
+    host: requiredEnv('DB_HOST'),
+    user: requiredEnv('DB_USER'),
+    password: requiredEnv('DB_PASS'),
+    database: requiredEnv('DB_NAME'),
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0

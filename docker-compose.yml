@@ -6,6 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: visitas-app
+    env_file:
+      - .env
     ports:
       - "4322:4322"
     environment:
