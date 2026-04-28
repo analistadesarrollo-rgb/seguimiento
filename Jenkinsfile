@@ -11,7 +11,7 @@ pipeline {
         IMAGE_NAME = "tu-usuario/visitas-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
         GIT_REPO = "https://github.com/tu-usuario/visitas_maps.git"
-        DEPLOY_SERVER = "production.server.com"
+        DEPLOY_SERVER = "seguimiento.serviredgane.cloud"
         DEPLOY_USER = "deploy"
     }
 
@@ -19,33 +19,38 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo '🔄 Clonando repositorio...'
-                deleteDir()
-                checkout scm
+                dir('source') {
+                    checkout scm
+                }
             }
         }
 
         stage('Build') {
             steps {
                 echo '🏗️  Construyendo aplicación...'
-                sh '''
-                    docker run --rm \
-                        --user "$(id -u):$(id -g)" \
-                        -v "$PWD":/app \
-                        -w /app \
-                        node:18-alpine \
-                        sh -lc "npm ci && npm run build"
-                '''
+                dir('source') {
+                    sh '''
+                        docker run --rm \
+                            --user "$(id -u):$(id -g)" \
+                            -v "$PWD":/app \
+                            -w /app \
+                            node:18-alpine \
+                            sh -lc "npm ci && npm run build"
+                    '''
+                }
             }
         }
 
         stage('Test') {
             steps {
                 echo '✅ Ejecutando pruebas...'
-                sh '''
-                    # Aquí puedes añadir tus pruebas
-                    # npm run test
-                    echo "Tests completados"
-                '''
+                dir('source') {
+                    sh '''
+                        # Aquí puedes añadir tus pruebas
+                        # npm run test
+                        echo "Tests completados"
+                    '''
+                }
             }
         }
 
@@ -55,25 +60,29 @@ pipeline {
             }
             steps {
                 echo '🔍 Analizando código con SonarQube...'
-                sh '''
-                    sonar-scanner \
-                        -Dsonar.projectKey=visitas-app \
-                        -Dsonar.sources=src \
-                        -Dsonar.host.url=http://sonarqube-server:9000 \
-                        -Dsonar.login=${SONARQUBE_TOKEN}
-                '''
+                dir('source') {
+                    sh '''
+                        sonar-scanner \
+                            -Dsonar.projectKey=visitas-app \
+                            -Dsonar.sources=src \
+                            -Dsonar.host.url=http://sonarqube-server:9000 \
+                            -Dsonar.login=${SONARQUBE_TOKEN}
+                    '''
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 echo '🐳 Construyendo imagen Docker...'
-                sh '''
-                    docker build \
-                        -t ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
-                        -t ${REGISTRY}/${IMAGE_NAME}:latest \
-                        .
-                '''
+                dir('source') {
+                    sh '''
+                        docker build \
+                            -t ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
+                            -t ${REGISTRY}/${IMAGE_NAME}:latest \
+                            .
+                    '''
+                }
             }
         }
 
@@ -152,7 +161,7 @@ EOF
                         -H "X-Auth-Email: ${CLOUDFLARE_EMAIL}" \
                         -H "X-Auth-Key: ${CLOUDFLARE_API_KEY}" \
                         -H "Content-Type: application/json" \
-                        --data "{\"type\":\"A\",\"name\":\"visitas.tudominio.com\",\"content\":\"${DEPLOY_SERVER}\",\"ttl\":3600,\"proxied\":true}"
+                        --data "{\"type\":\"A\",\"name\":\"seguimiento.serviredgane.cloud\",\"content\":\"${DEPLOY_SERVER}\",\"ttl\":3600,\"proxied\":true}"
                 '''
             }
         }
