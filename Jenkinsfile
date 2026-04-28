@@ -27,28 +27,16 @@ pipeline {
 
         stage('Build') {
             steps {
-                echo '🏗️  Construyendo aplicación...'
+                echo '🏗️  Validando que la estructura esté lista...'
                 dir('source') {
                     sh '''
-                        docker run --rm \
-                            --user "$(id -u):$(id -g)" \
-                            -v "$PWD":/src \
-                            -e HOME=/tmp \
-                            -e npm_config_cache=/tmp/.npm \
-                            node:18-alpine \
-                            sh -lc '
-                                set -e
-                                rm -rf /tmp/build
-                                mkdir -p /tmp/build
-                                cd /src
-                                find . -mindepth 1 -maxdepth 1 \
-                                    ! -name node_modules \
-                                    ! -name dist \
-                                    -exec cp -a {} /tmp/build/ +
-                                cd /tmp/build
-                                npm ci --cache /tmp/.npm
-                                npm run build
-                            '
+                        # Verificar que package.json existe
+                        test -f package.json || { echo "❌ package.json no encontrado"; exit 1; }
+                        
+                        # Verificar que Dockerfile existe
+                        test -f Dockerfile || { echo "❌ Dockerfile no encontrado"; exit 1; }
+                        
+                        echo "✅ Estructura validada, Docker manejará la compilación"
                     '''
                 }
             }
@@ -87,13 +75,17 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo '🐳 Construyendo imagen Docker...'
+                echo '🐳 Construyendo imagen Docker (compilación incluida)...'
                 dir('source') {
                     sh '''
                         docker build \
+                            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
                             -t ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
                             -t ${REGISTRY}/${IMAGE_NAME}:latest \
                             .
+                        
+                        echo "✅ Imagen Docker construida exitosamente"
+                        docker images | grep ${IMAGE_NAME}
                     '''
                 }
             }
