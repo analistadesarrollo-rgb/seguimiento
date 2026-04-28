@@ -127,13 +127,17 @@ pipeline {
                         # Asegurar que el compose del servidor está actualizado
                         git pull origin main
 
+                        # Persistir credenciales de BD para docker compose
+                        cat <<ENVEOF | sudo tee /opt/visitas-app/.env > /dev/null
+DB_HOST=$DB_HOST
+DB_USER=$DB_USER
+DB_PASS=$DB_PASS
+DB_NAME=$DB_NAME
+ENVEOF
+
                         # Detener y reconstruir contenedores con variables explícitas
                         sudo sh -lc '
                             cd /opt/visitas-app &&
-                            export DB_HOST="'"$DB_HOST"'" &&
-                            export DB_USER="'"$DB_USER"'" &&
-                            export DB_PASS="'"$DB_PASS"'" &&
-                            export DB_NAME="'"$DB_NAME"'" &&
                             docker compose down &&
                             docker compose up -d --build
                         '

@@ -4,16 +4,14 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: visitas-app
+    env_file:
+      - .env
     ports:
       - "4322:80"
     environment:
       NODE_ENV: production
       PORT: 80
       HOST: 0.0.0.0
-      DB_HOST: ${DB_HOST}
-      DB_USER: ${DB_USER}
-      DB_PASS: ${DB_PASS}
-      DB_NAME: ${DB_NAME}
     volumes:
       - ./storage:/app/storage
     restart: unless-stopped
