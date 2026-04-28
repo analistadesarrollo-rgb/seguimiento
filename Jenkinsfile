@@ -152,6 +152,9 @@ EOF
         }
 
         stage('Smoke Tests') {
+            when {
+                branch 'main'
+            }
             steps {
                 echo '🧪 Ejecutando pruebas de humo...'
                 sh '''
