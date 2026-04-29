@@ -37,6 +37,24 @@ const getEnvFromFile = (key: string) => {
 
 let pool: mysql.Pool | null = null;
 
+const QUERY_TIMEOUT_MS = 10000;
+
+const withTimeout = async <T>(operation: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> => {
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    });
+
+    try {
+        return await Promise.race([operation, timeoutPromise]);
+    } finally {
+        if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
+        }
+    }
+};
+
 const ensurePool = () => {
     if (!pool) {
         pool = mysql.createPool({
@@ -46,7 +64,8 @@ const ensurePool = () => {
             database: requiredEnv('DB_NAME'),
             waitForConnections: true,
             connectionLimit: 10,
-            queueLimit: 0
+            queueLimit: 0,
+            connectTimeout: 10000
         });
     }
 
@@ -54,7 +73,11 @@ const ensurePool = () => {
 };
 
 export async function query<T>(sql: string, params?: any[]): Promise<T[]> {
-    const [rows] = await ensurePool().query(sql, params || []);
+    const [rows] = await withTimeout(
+        ensurePool().query(sql, params || []),
+        QUERY_TIMEOUT_MS,
+        'Database query timed out'
+    );
     return rows as T[];
 }
 

@@ -41,6 +41,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
                 WHERE UPPER(TRIM(login)) = UPPER(TRIM(?))
                   AND TRIM(pass) = TRIM(?)
                   AND activo != 0
+                LIMIT 1
             `;
 
             try {
@@ -103,6 +104,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         const lowerMessage = message.toLowerCase();
         const isEnvError = lowerMessage.includes('missing required environment variable');
         const isDbConnectionError = lowerMessage.includes('connect') || lowerMessage.includes('access denied') || lowerMessage.includes('unknown database');
+        const isDbTimeoutError = lowerMessage.includes('timed out');
 
         return new Response(JSON.stringify({
             success: false,
@@ -110,6 +112,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
                 ? 'Faltan variables de base de datos en el servidor'
                 : isDbConnectionError
                     ? 'No se pudo conectar a la base de datos'
+                    : isDbTimeoutError
+                        ? 'La base de datos tardó demasiado en responder'
                     : 'Error al iniciar sesión',
             details: message
         }), {
