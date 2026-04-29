@@ -44,9 +44,9 @@ DB_NAME=appseguimiento
 EOF
 fi
 
-# 4. Fijar permisos del .env
+# 4. Fijar permisos del .env - IMPORTANTE: deploy debe poder leerlo
 echo "[setup-remote] fixing .env permissions"
-sudo chown root:root "${APP_DIR}/.env"
+sudo chown "${DEPLOY_USER}:${DEPLOY_USER}" "${APP_DIR}/.env"
 sudo chmod 600 "${APP_DIR}/.env"
 
 # 5. Crear usuario deploy si no existe
