@@ -82,20 +82,6 @@ pipeline {
             }
         }
 
-        stage('Push to Registry') {
-            steps {
-                echo '📤 Subiendo imagen a registro...'
-                withCredentials([usernamePassword(credentialsId: 'docker-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh '''
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin ${REGISTRY}
-                        docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-                        docker push ${REGISTRY}/${IMAGE_NAME}:latest
-                        docker logout ${REGISTRY}
-                    '''
-                }
-            }
-        }
-
         stage('Prepare SSH') {
             steps {
                 echo '🔑 Preparando clave SSH...'
