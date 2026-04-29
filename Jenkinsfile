@@ -113,11 +113,11 @@ pipeline {
                     sh '''
                         HOST=${DEPLOY_USER}@${DEPLOY_SERVER}
                         SSH_KEY="/var/lib/jenkins/.ssh/deploy_key"
-                        SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${SSH_KEY}"
+                        SSH_OPTS="-o BatchMode=yes -o PreferredAuthentications=publickey -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${SSH_KEY}"
                         
                         # Intentar conexión SSH
                         echo "[deploy] Verificando conectividad SSH..."
-                        if ! ssh ${SSH_OPTS} ${HOST} "echo OK" &>/dev/null; then
+                        if ! ssh ${SSH_OPTS} ${HOST} "echo OK" >/dev/null 2>&1; then
                             echo "[ERROR] No se puede conectar por SSH a ${HOST}"
                             echo "[ERROR] Ejecuta ESTO en el servidor ${DEPLOY_SERVER}:"
                             echo ""
