@@ -19,11 +19,16 @@ sudo chmod 600 ${APP_DIR}/.env
 
 cd ${APP_DIR}
 
+echo "[deploy-script] syncing repository to origin/main"
+git fetch origin main
+git reset --hard origin/main
+
 echo "[deploy-script] stopping compose"
 sudo docker compose down || true
 
 echo "[deploy-script] starting compose (build)"
-sudo docker compose up -d --build
+sudo docker compose build --no-cache --pull
+sudo docker compose up -d
 
 echo "[deploy-script] waiting 15s for services to start"
 sleep 15
