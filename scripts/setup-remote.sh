@@ -28,10 +28,10 @@ fi
 # Esto es CRÍTICO para que git fetch funcione correctamente
 echo "[setup-remote] fixing directory ownership (recursivo) - CRITICAL FOR GIT OPS"
 sudo chown -R "${DEPLOY_USER}:${DEPLOY_USER}" "${APP_DIR}"
-sudo find "${APP_DIR}" -type d -exec chmod 755 {} \;
-sudo find "${APP_DIR}" -type f -exec chmod 644 {} \;
+sudo find "${APP_DIR}" -type d -exec chmod 755 {} +
+sudo find "${APP_DIR}" -type f -exec chmod 644 {} +
 # Hacer scripts ejecutables
-sudo find "${APP_DIR}"/scripts -name "*.sh" -exec chmod 755 {} \; 2>/dev/null || true
+sudo find "${APP_DIR}"/scripts -name "*.sh" -exec chmod 755 {} + 2>/dev/null || true
 
 # 3. Asegurar que existe .env (si no, crear con valores correctos)
 if [ ! -f "${APP_DIR}/.env" ]; then
