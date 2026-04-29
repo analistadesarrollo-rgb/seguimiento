@@ -20,8 +20,9 @@ sudo chmod 600 ${APP_DIR}/.env
 cd ${APP_DIR}
 
 echo "[deploy-script] syncing repository to origin/main"
-git fetch origin main
-git reset --hard origin/main
+git config --global --add safe.directory ${APP_DIR} || true
+sudo -u deploy git -C ${APP_DIR} fetch origin main
+sudo -u deploy git -C ${APP_DIR} reset --hard origin/main
 
 echo "[deploy-script] stopping compose"
 sudo docker compose down || true

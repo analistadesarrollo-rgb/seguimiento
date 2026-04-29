@@ -135,10 +135,10 @@ pipeline {
                         fi
                         
                         echo "[1/2] Setting up server (first time only, idempotent)..."
-                        ssh ${SSH_OPTS} ${HOST} "sudo bash -s" < scripts/setup-remote.sh || true
+                        ssh ${SSH_OPTS} ${HOST} "sudo -n bash -s" < scripts/setup-remote.sh || true
                         
                         echo "[2/2] Pulling latest code and deploying..."
-                        ssh ${SSH_OPTS} ${HOST} "cd /opt/visitas-app && git pull origin main && sudo /opt/visitas-app/scripts/deploy.sh"
+                        ssh ${SSH_OPTS} ${HOST} "sudo -n /opt/visitas-app/scripts/deploy.sh"
                         
                         echo '✅ Despliegue completado exitosamente'
                     '''
