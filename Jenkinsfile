@@ -83,9 +83,6 @@ pipeline {
         }
 
         stage('Push to Registry') {
-            when {
-                branch 'main'
-            }
             steps {
                 echo '📤 Subiendo imagen a registro...'
                 withCredentials([usernamePassword(credentialsId: 'docker-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
@@ -100,9 +97,6 @@ pipeline {
         }
 
         stage('Prepare SSH') {
-            when {
-                branch 'main'
-            }
             steps {
                 echo '🔑 Preparando clave SSH...'
                 sh '''
@@ -127,9 +121,6 @@ pipeline {
         }
 
         stage('Deploy to Production') {
-            when {
-                branch 'main'
-            }
             steps {
                 echo '🚀 Desplegando a producción (setup + deploy)...'
                 dir('source') {
@@ -170,9 +161,6 @@ pipeline {
         }
 
         stage('Update Cloudflare DNS') {
-            when {
-                branch 'main'
-            }
             steps {
                 echo '☁️  Actualizando Cloudflare...'
                 sh '''
@@ -186,9 +174,6 @@ pipeline {
         }
 
         stage('Purge Cloudflare Cache') {
-            when {
-                branch 'main'
-            }
             steps {
                 echo '🧹 Limpiando caché de Cloudflare...'
                 sh '''
@@ -202,9 +187,6 @@ pipeline {
         }
 
         stage('Smoke Tests') {
-            when {
-                branch 'main'
-            }
             steps {
                 echo '🧪 Ejecutando pruebas de humo...'
                 sh '''
