@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 
 // API base URL - Now using Astro API routes
 const API_BASE = '/api';
@@ -122,6 +123,50 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
         return filteredVisitas.slice(start, start + pageSize);
     }, [filteredVisitas, page]);
 
+    const exportToExcel = useCallback(() => {
+        if (filteredVisitas.length === 0) {
+            return;
+        }
+
+        const rows = filteredVisitas.map((visita, index) => [
+            index + 1,
+            visita.punto_venta,
+            visita.documento,
+            visita.supervisor,
+            visita.sucursal,
+            visita.fecha,
+            visita.hora,
+            visita.empresa,
+            visita.latitud,
+            visita.longitud
+        ]);
+
+        const worksheet = XLSX.utils.aoa_to_sheet([
+            ['#', 'Punto de Venta', 'Documento', 'Supervisor', 'Sucursal', 'Fecha', 'Hora', 'Empresa', 'Latitud', 'Longitud'],
+            ...rows
+        ]);
+
+        worksheet['!cols'] = [
+            { wch: 6 },
+            { wch: 28 },
+            { wch: 18 },
+            { wch: 24 },
+            { wch: 24 },
+            { wch: 14 },
+            { wch: 12 },
+            { wch: 14 },
+            { wch: 14 },
+            { wch: 14 }
+        ];
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Visitas');
+
+        const fileDate = new Date().toISOString().split('T')[0];
+        const suffix = search.trim() ? '_filtrado' : '';
+        XLSX.writeFile(workbook, `informe_visitas_${fileDate}${suffix}.xlsx`);
+    }, [filteredVisitas, search]);
+
     const totalPages = Math.ceil(filteredVisitas.length / pageSize);
 
     // Stats
@@ -181,6 +226,17 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                         </svg>
                         Aplicar Filtros
+                    </button>
+
+                    <button
+                        onClick={exportToExcel}
+                        disabled={filteredVisitas.length === 0}
+                        className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-medium hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-emerald-500/25 flex items-center gap-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Exportar Excel
                     </button>
                 </div>
             </div>
