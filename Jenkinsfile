@@ -142,11 +142,29 @@ pipeline {
 set -euo pipefail
 
 cd /opt/visitas-app
+
+# CRITICAL FIX: Ensure deploy user owns everything before git operations
+# This prevents "cannot open .git/FETCH_HEAD: Permission denied" errors
+echo "[deploy] Fixing directory permissions (git operations require ownership)..."
+sudo chown -R deploy:deploy /opt/visitas-app 2>/dev/null || true
+sudo find /opt/visitas-app -type d -exec chmod 755 {} \; 2>/dev/null || true
+sudo find /opt/visitas-app -type f -exec chmod 644 {} \; 2>/dev/null || true
+sudo find /opt/visitas-app/scripts -name "*.sh" -exec chmod 755 {} \; 2>/dev/null || true
+
+# Now proceed with git operations
+echo "[deploy] Configuring git for safe directory..."
 git config --global --add safe.directory /opt/visitas-app || true
+
+echo "[deploy] Fetching latest code from main branch..."
 git fetch origin main
+
+echo "[deploy] Resetting to latest commit..."
 git reset --hard origin/main
 
+echo "[deploy] Stopping existing containers..."
 docker compose down || true
+
+echo "[deploy] Building fresh Docker image..."
 docker compose build --no-cache --pull
 docker compose up -d
 
