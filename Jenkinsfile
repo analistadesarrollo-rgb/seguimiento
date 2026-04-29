@@ -138,7 +138,7 @@ pipeline {
                         ssh ${SSH_OPTS} ${HOST} "sudo -n bash -s" < scripts/setup-remote.sh || true
                         
                         echo "[2/2] Pulling latest code and deploying..."
-                        ssh ${SSH_OPTS} ${HOST} "sudo -n /opt/visitas-app/scripts/deploy.sh"
+                        ssh ${SSH_OPTS} ${HOST} "sudo -n /bin/bash /opt/visitas-app/scripts/deploy.sh"
                         
                         echo '✅ Despliegue completado exitosamente'
                     '''
