@@ -227,7 +227,9 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
                         </svg>
                         Aplicar Filtros
                     </button>
+                </div>
 
+                <div className="mt-4 flex justify-end">
                     <button
                         onClick={exportToExcel}
                         disabled={paginatedVisitas.length === 0}
