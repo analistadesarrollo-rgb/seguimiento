@@ -124,11 +124,11 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
     }, [filteredVisitas, page]);
 
     const exportToExcel = useCallback(() => {
-        if (filteredVisitas.length === 0) {
+        if (paginatedVisitas.length === 0) {
             return;
         }
 
-        const rows = filteredVisitas.map((visita, index) => [
+        const rows = paginatedVisitas.map((visita, index) => [
             index + 1,
             visita.punto_venta,
             visita.documento,
@@ -163,9 +163,9 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Visitas');
 
         const fileDate = new Date().toISOString().split('T')[0];
-        const suffix = search.trim() ? '_filtrado' : '';
+        const suffix = search.trim() ? '_filtrado' : '_inicial';
         XLSX.writeFile(workbook, `informe_visitas_${fileDate}${suffix}.xlsx`);
-    }, [filteredVisitas, search]);
+    }, [paginatedVisitas, search]);
 
     const totalPages = Math.ceil(filteredVisitas.length / pageSize);
 
@@ -230,7 +230,7 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
 
                     <button
                         onClick={exportToExcel}
-                        disabled={filteredVisitas.length === 0}
+                        disabled={paginatedVisitas.length === 0}
                         className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-xl font-medium hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-emerald-500/25 flex items-center gap-2"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
