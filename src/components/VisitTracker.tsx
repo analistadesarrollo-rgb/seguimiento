@@ -162,10 +162,14 @@ export default function VisitTracker({ userPerfil, userLogin }: Props) {
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Visitas');
 
-        const fileDate = new Date().toISOString().split('T')[0];
+        const rangeStart = filters.fecha_inicio || 'sin_fecha_inicio';
+        const rangeEnd = filters.fecha_fin || filters.fecha_inicio || 'sin_fecha_fin';
+        const fileDate = rangeStart === rangeEnd
+            ? rangeStart
+            : `${rangeStart}_a_${rangeEnd}`;
         const suffix = search.trim() ? '_filtrado' : '_inicial';
         XLSX.writeFile(workbook, `informe_visitas_${fileDate}${suffix}.xlsx`);
-    }, [filteredVisitas, search]);
+    }, [filteredVisitas, search, filters.fecha_inicio, filters.fecha_fin]);
 
     const totalPages = Math.ceil(filteredVisitas.length / pageSize);
 
