@@ -138,7 +138,21 @@ pipeline {
                         ssh ${SSH_OPTS} ${HOST} "sudo -n bash -s" < scripts/setup-remote.sh || true
                         
                         echo "[2/2] Pulling latest code and deploying..."
-                        ssh ${SSH_OPTS} ${HOST} "sudo -n /bin/bash /opt/visitas-app/scripts/deploy.sh"
+                        ssh ${SSH_OPTS} ${HOST} "bash -se" <<'REMOTE'
+set -euo pipefail
+
+cd /opt/visitas-app
+git config --global --add safe.directory /opt/visitas-app || true
+git fetch origin main
+git reset --hard origin/main
+
+docker compose down || true
+docker compose build --no-cache --pull
+docker compose up -d
+
+sleep 15
+curl -fsS http://localhost:80/ >/dev/null
+REMOTE
                         
                         echo '✅ Despliegue completado exitosamente'
                     '''
